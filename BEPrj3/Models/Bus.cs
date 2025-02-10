@@ -17,7 +17,7 @@ public partial class Bus
     [Column("image_bus")]
     public string? ImageBus {  get; set; }
 
-    public virtual BusType BusType { get; set; } = null!;
+    public virtual BusType? BusType { get; set; } = null!;
 
     public virtual ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
 }

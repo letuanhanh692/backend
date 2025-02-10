@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace BEPrj3.Models;
 
@@ -13,7 +14,8 @@ public partial class PriceList
 
     public decimal Price { get; set; }
 
-    public virtual BusType BusType { get; set; } = null!;
+    public virtual BusType? BusType { get; set; } = null!;
 
-    public virtual Route Route { get; set; } = null!;
+    [JsonIgnore]
+    public virtual Route Route { get; set; }
 }
