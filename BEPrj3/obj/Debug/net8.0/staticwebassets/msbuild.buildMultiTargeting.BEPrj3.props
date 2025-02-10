@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\BEPrj3.props" />
+</Project>

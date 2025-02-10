@@ -1,0 +1,6 @@
+@BEPrj3_HostAddress = http://localhost:5150
+
+GET {{BEPrj3_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
