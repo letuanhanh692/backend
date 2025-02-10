@@ -25,12 +25,12 @@ namespace BEPrj3.Controllers
         public async Task<ActionResult<IEnumerable<object>>> GetSchedules()
         {
             var schedules = await _context.Schedules
-                .Include(s => s.Bus)
+                .Include(s => s.Route)
                 .Include(s => s.Bookings)
                 .Select(s => new
                 {
                     s.Id,
-                    BusNumber = s.Bus.BusNumber,
+                    RouteId = s.Route.Id,
                     TotalSeats = s.Bus.TotalSeats,
                     AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
                     s.DepartureTime,
