@@ -22,9 +22,23 @@ namespace BEPrj3.Controllers
 
         // GET: api/Schedules
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Schedule>>> GetSchedules()
+        public async Task<ActionResult<IEnumerable<object>>> GetSchedules()
         {
-            return await _context.Schedules.ToListAsync();
+            var schedules = await _context.Schedules
+                .Include(s => s.Bus)
+                .Include(s => s.Bookings)
+                .Select(s => new
+                {
+                    s.Id,
+                    BusNumber = s.Bus.BusNumber,
+                    TotalSeats = s.Bus.TotalSeats,
+                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                    s.DepartureTime,
+                    s.ArrivalTime
+                })
+                .ToListAsync();
+
+            return Ok(schedules);
         }
 
         // GET: api/Schedules/5
