@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BEPrj3.Models;
+using BEPrj3.Models.DTO;
 
 namespace BEPrj3.Controllers
 {
@@ -116,12 +117,13 @@ namespace BEPrj3.Controllers
         // POST: api/Schedules
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         // POST: api/Schedules
+        // POST: api/Schedules
         [HttpPost]
-        public async Task<ActionResult<Schedule>> PostSchedule(Schedule schedule)
+        public async Task<ActionResult<Schedule>> PostSchedule([FromBody] ScheduleRequest scheduleRequest)
         {
             // Kiểm tra BusId và RouteId hợp lệ
-            var bus = await _context.Buses.FindAsync(schedule.BusId);
-            var route = await _context.Routes.FindAsync(schedule.RouteId);
+            var bus = await _context.Buses.FindAsync(scheduleRequest.BusId);
+            var route = await _context.Routes.FindAsync(scheduleRequest.RouteId);
 
             if (bus == null)
             {
@@ -134,13 +136,20 @@ namespace BEPrj3.Controllers
             }
 
             // Kiểm tra thời gian hợp lệ
-            if (schedule.ArrivalTime <= schedule.DepartureTime)
+            if (scheduleRequest.ArrivalTime <= scheduleRequest.DepartureTime)
             {
                 return BadRequest("ArrivalTime must be later than DepartureTime.");
             }
 
-            // Gán AvailableSeats bằng sức chứa của Bus
-            schedule.AvailableSeats = bus.TotalSeats;
+            // Tạo đối tượng Schedule mới từ dữ liệu yêu cầu
+            var schedule = new Schedule
+            {
+                BusId = scheduleRequest.BusId,
+                RouteId = scheduleRequest.RouteId,
+                DepartureTime = scheduleRequest.DepartureTime,
+                ArrivalTime = scheduleRequest.ArrivalTime,
+                AvailableSeats = bus.TotalSeats // Gán AvailableSeats bằng sức chứa của Bus
+            };
 
             _context.Schedules.Add(schedule);
             await _context.SaveChangesAsync();
@@ -157,7 +166,6 @@ namespace BEPrj3.Controllers
             };
 
             return CreatedAtAction(nameof(GetScheduleDetails), new { id = schedule.Id }, response);
-
         }
 
 
@@ -228,8 +236,44 @@ namespace BEPrj3.Controllers
             return Ok(schedules);
         }
 
-        // GET: api/Schedules/Details/5
-        // GET: api/Schedules/Details/5
+        // GET: api/Schedules/today
+        [HttpGet("today")]
+        public async Task<ActionResult<IEnumerable<object>>> GetSchedulesForToday()
+        {
+            var today = DateTime.Now.Date; // Lấy ngày hiện tại (không có giờ phút giây)
+
+            var schedules = await _context.Schedules
+                .Include(s => s.Route)
+                .Include(s => s.Bus)
+                .ThenInclude(b => b.BusType)
+                .Include(s => s.Bookings)
+                .Where(s => s.DepartureTime.Date == today) // Kiểm tra xem ngày khởi hành có phải là hôm nay không
+                .Select(s => new
+                {
+                    s.Id,
+                    BusNumber = s.Bus.BusNumber,
+                    BusType = s.Bus.BusType.TypeName,
+                    TotalSeats = s.Bus.TotalSeats,
+                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                    s.DepartureTime,
+                    s.ArrivalTime,
+                    s.Route.StartingPlace,
+                    s.Route.DestinationPlace,
+                    Price = s.Route.PriceLists
+                        .Where(p => p.BusTypeId == s.Bus.BusTypeId)
+                        .Select(p => p.Price)
+                        .FirstOrDefault() // Lấy giá phù hợp với BusTypeId
+                })
+                .ToListAsync();
+
+            if (schedules.Count == 0)
+            {
+                return NotFound(new { message = "No schedules available for today." });
+            }
+
+            return Ok(schedules);
+        }
+
 
 
 

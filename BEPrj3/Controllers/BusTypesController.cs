@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BEPrj3.Models;
+using BEPrj3.Models.DTO;
 
 namespace BEPrj3.Controllers
 {
@@ -74,14 +75,25 @@ namespace BEPrj3.Controllers
 
         // POST: api/BusTypes
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // POST: api/BusTypes
         [HttpPost]
-        public async Task<ActionResult<BusType>> PostBusType(BusType busType)
+        public async Task<ActionResult<BusType>> PostBusType(BusTypeDTO busTypeDTO)
         {
+            // Tạo đối tượng BusType từ DTO
+            var busType = new BusType
+            {
+                TypeName = busTypeDTO.TypeName,
+                Description = busTypeDTO.Description
+            };
+
+            // Thêm đối tượng BusType vào context và lưu vào database
             _context.BusTypes.Add(busType);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetBusType", new { id = busType.Id }, busType);
+            // Trả về thông tin đối tượng busType đã được thêm vào
+            return CreatedAtAction("GetBusType", new { id = busType.Id }, new { busType.TypeName, busType.Description });
         }
+
 
         // DELETE: api/BusTypes/5
         [HttpDelete("{id}")]
