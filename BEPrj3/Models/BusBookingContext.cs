@@ -48,11 +48,12 @@ public partial class BusBookingContext : DbContext
     public virtual DbSet<StaffRoute> StaffRoutes { get; set; }
 
 
+
     public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Data Source=Zun6925\\SQLEXPRESS;Initial Catalog=BusBooking;User ID=sa;Password=12345678;Encrypt=False;Trust Server Certificate=True");
+        => optionsBuilder.UseSqlServer("Data Source=MSI;Initial Catalog=BusBooking;Persist Security Info=True;User ID=sa;Password=12345678;Encrypt=True;Trust Server Certificate=True");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -261,7 +262,7 @@ public partial class BusBookingContext : DbContext
                 .HasConstraintName("FK_StaffRoute_Staff");
         });
 
-      
+
 
         modelBuilder.Entity<User>(entity =>
         {
@@ -310,7 +311,6 @@ public partial class BusBookingContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
-public DbSet<BEPrj3.Models.DTO.UserDTO> UserDTO { get; set; } = default!;
-
-public DbSet<BEPrj3.Models.DTO.RouteDTO> RouteDTO { get; set; } = default!;
+    public DbSet<BEPrj3.Models.DTO.UserDTO> UserDTO { get; set; } = default!;
+    public object BookingDetails { get; internal set; }
 }
