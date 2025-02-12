@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json.Serialization;
 using static BEPrj3.Models.BusBookingContext;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,7 +36,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        //options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+
+    });
+builder.Services.AddDirectoryBrowser();
 var app = builder.Build();
+
+app.UseStaticFiles();
+app.UseDirectoryBrowser();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
