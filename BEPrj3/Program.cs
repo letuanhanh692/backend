@@ -1,9 +1,11 @@
 using BEPrj3.Models;
+using BEPrj3.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json.Serialization;
 using static BEPrj3.Models.BusBookingContext;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +37,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    });
+//Connect VNPay API
+builder.Services.AddScoped<IVnPayService, VnPayService>();
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
