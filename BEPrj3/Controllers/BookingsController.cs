@@ -7,8 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BEPrj3.Models;
 using BEPrj3.Models.DTO;
-using BEPrj3.Models.Vnpay;
-using BEPrj3.Services; // Import service VNPay
 
 namespace BEPrj3.Controllers
 {
@@ -17,27 +15,44 @@ namespace BEPrj3.Controllers
     public class BookingsController : ControllerBase
     {
         private readonly BusBookingContext _context;
-        private readonly IVnPayService _vnPayService;
 
-        public BookingsController(BusBookingContext context, IVnPayService vnPayService)
+        public BookingsController(BusBookingContext context)
         {
             _context = context;
-            _vnPayService = vnPayService;
         }
 
         // GET: api/Bookings
+        // GET: api/Bookings
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Booking>>> GetBookings()
+        public async Task<ActionResult<IEnumerable<Booking>>> GetBookings(int page = 1, int pageSize = 4)
         {
-            return await _context.Bookings.ToListAsync();
+            var totalRecords = await _context.Bookings.CountAsync(); // Tổng số bản ghi
+            var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize); // Tính tổng số trang
+
+            var bookings = await _context.Bookings
+                .Skip((page - 1) * pageSize) // Bỏ qua các bản ghi trước trang hiện tại
+                .Take(pageSize) // Lấy số bản ghi theo kích thước trang
+                .ToListAsync();
+
+            var response = new
+            {
+                TotalRecords = totalRecords,
+                TotalPages = totalPages,
+                CurrentPage = page,
+                PageSize = pageSize,
+                Bookings = bookings
+            };
+
+            return Ok(response);
         }
+
 
         // GET: api/Bookings/5
         [HttpGet("{id}")]
         public async Task<ActionResult<BookingResponseDto>> GetBooking(int id)
         {
             var booking = await _context.Bookings
-                .Include(b => b.User)
+                .Include(b => b.User) // Bổ sung User để tránh lỗi null
                 .Include(b => b.Schedule)
                     .ThenInclude(s => s.Route)
                 .Include(b => b.Schedule)
@@ -45,13 +60,17 @@ namespace BEPrj3.Controllers
                     .ThenInclude(b => b.BusType)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
-            if (booking == null) return NotFound();
+            if (booking == null)
+            {
+                return NotFound();
+            }
 
+            // Kiểm tra null trước khi truy cập thuộc tính
             var bookingResponse = new BookingResponseDto
             {
                 BookingId = booking.Id,
-                UserId = booking.UserId,
-                ScheduleId = booking.ScheduleId,
+                UserId = booking.UserId, // Thêm dòng này
+                ScheduleId = booking.ScheduleId, // Thêm dòng này
                 Name = booking.User?.Name ?? "Unknown",
                 Age = booking.Age,
                 Phone = booking.User?.Phone ?? "Unknown",
@@ -60,6 +79,8 @@ namespace BEPrj3.Controllers
                 BookingDate = booking.BookingDate ?? DateTime.MinValue,
                 TotalAmount = booking.TotalAmount,
                 Status = booking.Status,
+
+                // Thông tin chuyến đi
                 BusNumber = booking.Schedule?.Bus?.BusNumber ?? "N/A",
                 BusType = booking.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
                 DepartTime = booking.Schedule?.DepartureTime ?? DateTime.MinValue,
@@ -69,7 +90,38 @@ namespace BEPrj3.Controllers
                 Distance = (double)(booking.Schedule?.Route?.Distance ?? 0)
             };
 
+
             return Ok(bookingResponse);
+        }
+
+        // PUT: api/Bookings/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutBooking(int id, Booking booking)
+        {
+            if (id != booking.Id)
+            {
+                return BadRequest();
+            }
+
+            _context.Entry(booking).State = EntityState.Modified;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!BookingExists(id))
+                {
+                    return NotFound();
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent();
         }
 
         // POST: api/Bookings
@@ -82,23 +134,33 @@ namespace BEPrj3.Controllers
                 .ThenInclude(b => b.BusType)
                 .FirstOrDefaultAsync(s => s.Id == bookingRequestDto.ScheduleId);
 
-            if (schedule == null) return BadRequest("Chuyến đi không tồn tại.");
+            if (schedule == null)
+            {
+                return BadRequest("Chuyến đi không tồn tại.");
+            }
 
             int bookedSeats = await _context.Bookings
                 .Where(b => b.ScheduleId == bookingRequestDto.ScheduleId)
                 .SumAsync(b => b.SeatNumber);
 
             int availableSeats = schedule.Bus.TotalSeats - bookedSeats;
+
             if (availableSeats < bookingRequestDto.SeatNumber)
+            {
                 return BadRequest("Không đủ ghế để đặt.");
+            }
 
             var priceList = await _context.PriceLists
                 .FirstOrDefaultAsync(pl => pl.RouteId == schedule.RouteId && pl.BusTypeId == schedule.Bus.BusTypeId);
 
-            if (priceList == null) return BadRequest("Không tìm thấy giá vé.");
-
+            if (priceList == null)
+            {
+                return BadRequest("Không tìm thấy giá vé cho chuyến đi này.");
+            }
             if (schedule.DepartureTime < DateTime.Now)
-                return BadRequest("Không thể đặt vé cho chuyến đi đã khởi hành.");
+            {
+                return BadRequest("Cannot book a trip that has already passed.");
+            }
 
             decimal pricePerSeat = priceList.Price;
             if (bookingRequestDto.Age < 5) pricePerSeat = 0;
@@ -112,58 +174,46 @@ namespace BEPrj3.Controllers
                 UserId = bookingRequestDto.UserId,
                 ScheduleId = bookingRequestDto.ScheduleId,
                 SeatNumber = bookingRequestDto.SeatNumber,
+                Name = bookingRequestDto.Name,
                 Age = bookingRequestDto.Age,
                 BookingDate = DateTime.Now,
                 TotalAmount = totalAmount,
-                Status = "Pending Payment"
+                Status = "Booked"
             };
 
             _context.Bookings.Add(booking);
             await _context.SaveChangesAsync();
 
+            // Cập nhật số ghế còn lại trong lịch trình
             schedule.AvailableSeats -= bookingRequestDto.SeatNumber;
             _context.Schedules.Update(schedule);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetBooking", new { id = booking.Id }, new { bookingId = booking.Id });
-        }
-
-        // POST: api/Bookings/Payment
-        [HttpPost("payment")]
-        public async Task<ActionResult> PostPayment([FromBody] PaymentInformationModel model)
-        {
-            var booking = await _context.Bookings.FindAsync(model.BookingId);
-            if (booking == null) return NotFound("Không tìm thấy đơn đặt vé.");
-
-            model.TotalAmount = (double)booking.TotalAmount;
-            model.SeatCount = booking.SeatNumber;
-            model.OrderDescription = $"Thanh toán vé xe: {booking.Id}";
-            model.OrderType = "bus_ticket";
-
-            string paymentUrl = _vnPayService.CreatePaymentUrl(model, HttpContext);
-
-            return Ok(new { PaymentUrl = paymentUrl });
-        }
-
-        // GET: api/Bookings/PaymentCallback
-        [HttpGet("paymentCallback")]
-        public async Task<ActionResult> PaymentCallback()
-        {
-            var response = _vnPayService.PaymentExecute(Request.Query);
-
-            if (response.Success)
+            var bookingResponse = new BookingResponseDto
             {
-                var booking = await _context.Bookings.FindAsync(response.BookingId);
-                if (booking == null) return NotFound("Không tìm thấy đơn đặt vé.");
+                BookingId = booking.Id,
+                UserId = booking.UserId,
+                ScheduleId = booking.ScheduleId,
+                SeatNumber = booking.SeatNumber,
+                Age = booking.Age,
+                BookingDate = (DateTime)booking.BookingDate,
+                TotalAmount = booking.TotalAmount,
+                Status = booking.Status,
+                Name = booking.Name,
 
-                booking.Status = "Paid";
-                _context.Bookings.Update(booking);
-                await _context.SaveChangesAsync();
+                Phone = bookingRequestDto.Phone,
+                Email = bookingRequestDto.Email,
 
-                return Ok(new { message = "Thanh toán thành công!", response });
-            }
+                BusNumber = schedule.Bus.BusNumber,
+                BusType = schedule.Bus.BusType.TypeName,
+                DepartTime = schedule.DepartureTime,
+                ArrivalTime = schedule.ArrivalTime,
+                StartingPlace = schedule.Route.StartingPlace,
+                DestinationPlace = schedule.Route.DestinationPlace,
+                Distance = (double)schedule.Route.Distance
+            };
 
-            return BadRequest(new { message = "Thanh toán thất bại!", response });
+            return CreatedAtAction("GetBooking", new { id = booking.Id }, bookingResponse);
         }
 
         // DELETE: api/Bookings/5
@@ -171,11 +221,15 @@ namespace BEPrj3.Controllers
         public async Task<IActionResult> DeleteBooking(int id)
         {
             var booking = await _context.Bookings.FindAsync(id);
-            if (booking == null) return NotFound();
+            if (booking == null)
+            {
+                return NotFound();
+            }
 
             _context.Bookings.Remove(booking);
             await _context.SaveChangesAsync();
 
+            // Cập nhật lại số ghế còn lại khi hủy vé
             var schedule = await _context.Schedules.FirstOrDefaultAsync(s => s.Id == booking.ScheduleId);
             if (schedule != null)
             {
@@ -191,5 +245,74 @@ namespace BEPrj3.Controllers
         {
             return _context.Bookings.Any(e => e.Id == id);
         }
+
+        // GET: api/Bookings/Search
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<BookingResponseDto>>> SearchBookings(string searchQuery, int pageNumber = 1, int pageSize = 4)
+        {
+            var bookingsQuery = _context.Bookings
+                .Include(b => b.User)
+                .Include(b => b.Schedule)
+                    .ThenInclude(s => s.Route)
+                .Include(b => b.Schedule)
+                    .ThenInclude(s => s.Bus)
+                    .ThenInclude(b => b.BusType)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(searchQuery))
+            {
+                bookingsQuery = bookingsQuery.Where(b =>
+                    b.User.Name.Contains(searchQuery) ||  // Tìm theo tên người dùng
+                    b.SeatNumber.ToString().Contains(searchQuery) ||  // Tìm theo số ghế đặt
+                    b.TotalAmount.ToString().Contains(searchQuery) || // Tìm theo số tiền thanh toán
+                    b.Status.Contains(searchQuery)  // Tìm theo trạng thái
+                );
+            }
+
+            // Phân trang
+            var totalRecords = await bookingsQuery.CountAsync();  // Số lượng tổng các bản ghi
+            var bookings = await bookingsQuery
+                .Skip((pageNumber - 1) * pageSize)  // Bỏ qua số lượng bản ghi trước đó
+                .Take(pageSize)  // Lấy số bản ghi theo pageSize
+                .ToListAsync();
+
+            var bookingResponses = bookings.Select(b => new BookingResponseDto
+            {
+                BookingId = b.Id,
+                UserId = b.UserId,
+                ScheduleId = b.ScheduleId,
+                SeatNumber = b.SeatNumber,
+                Age = b.Age,
+                BookingDate = (DateTime)b.BookingDate,
+                TotalAmount = b.TotalAmount,
+                Status = b.Status,
+                Name = b.User.Name,
+                Phone = b.User.Phone,
+                Email = b.User.Email,
+                BusNumber = b.Schedule.Bus.BusNumber,
+                BusType = b.Schedule.Bus.BusType.TypeName,
+                DepartTime = b.Schedule.DepartureTime,
+                ArrivalTime = b.Schedule.ArrivalTime,
+                StartingPlace = b.Schedule.Route.StartingPlace,
+                DestinationPlace = b.Schedule.Route.DestinationPlace,
+                Distance = (double)b.Schedule.Route.Distance
+            }).ToList();
+
+            // Trả về kết quả và thông tin phân trang (ví dụ tổng số bản ghi)
+            var paginationResult = new
+            {
+                TotalRecords = totalRecords,
+                TotalPages = (int)Math.Ceiling(totalRecords / (double)pageSize),
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                Bookings = bookingResponses
+            };
+
+            return Ok(paginationResult);
+        }
+
+
     }
 }
+
+   

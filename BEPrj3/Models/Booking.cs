@@ -13,6 +13,8 @@ public partial class Booking
 
     public int SeatNumber { get; set; }
 
+    public string Name { get; set; }
+
     public int Age { get; set; }
 
     public DateTime? BookingDate { get; set; }
