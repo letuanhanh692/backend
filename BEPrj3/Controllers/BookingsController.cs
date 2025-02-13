@@ -71,7 +71,7 @@ namespace BEPrj3.Controllers
                 BookingId = booking.Id,
                 UserId = booking.UserId, // Thêm dòng này
                 ScheduleId = booking.ScheduleId, // Thêm dòng này
-                Name = booking.User?.Name ?? "Unknown",
+                Name = booking.Name ?? "Unknown",
                 Age = booking.Age,
                 Phone = booking.User?.Phone ?? "Unknown",
                 Email = booking.User?.Email ?? "Unknown",

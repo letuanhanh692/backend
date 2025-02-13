@@ -28,4 +28,6 @@ public partial class Booking
     public virtual Schedule Schedule { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
+
+    public string? Name { get; set; } 
 }

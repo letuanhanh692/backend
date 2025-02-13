@@ -22,25 +22,44 @@ namespace BEPrj3.Controllers
         }
 
         // GET: api/Schedules
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<object>>> GetSchedules()
+       // GET: api/Schedules
+[HttpGet]
+public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
+{
+    var schedules = await _context.Schedules
+        .Include(s => s.Route)
+        .Include(s => s.Bookings)
+        .Skip((page - 1) * pageSize) // Bỏ qua số bản ghi trước đó
+        .Take(pageSize) // Lấy số bản ghi theo pageSize
+        .Select(s => new
         {
-            var schedules = await _context.Schedules
-                .Include(s => s.Route)
-                .Include(s => s.Bookings)
-                .Select(s => new
-                {
-                    s.Id,
-                    RouteId = s.Route.Id,
-                    TotalSeats = s.Bus.TotalSeats,
-                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
-                    s.DepartureTime,
-                    s.ArrivalTime
-                })
-                .ToListAsync();
+            s.Id,
+            RouteId = s.Route.Id,
+            TotalSeats = s.Bus.TotalSeats,
+            AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+            s.DepartureTime,
+            s.ArrivalTime
+        })
+        .ToListAsync();
 
-            return Ok(schedules);
-        }
+    // Lấy tổng số bản ghi để trả về tổng số trang
+    var totalSchedules = await _context.Schedules.CountAsync();
+
+    // Tính số trang
+    var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
+
+    var result = new
+    {
+        totalSchedules,
+        totalPages,
+        currentPage = page,
+        pageSize,
+        schedules
+    };
+
+    return Ok(result);
+}
+
 
         // GET: api/Schedules/5
         [HttpGet("{id}")]
@@ -116,8 +135,6 @@ namespace BEPrj3.Controllers
 
         // POST: api/Schedules
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        // POST: api/Schedules
-        // POST: api/Schedules
         [HttpPost]
         public async Task<ActionResult<Schedule>> PostSchedule([FromBody] ScheduleRequest scheduleRequest)
         {
@@ -272,6 +289,80 @@ namespace BEPrj3.Controllers
             }
 
             return Ok(schedules);
+        }
+
+        // GET: api/Schedules/searchadmin
+        [HttpGet("searchadmin")]
+        public async Task<ActionResult<IEnumerable<object>>> SearchAdmin(
+     [FromQuery] string searchQuery, // Thêm tham số searchQuery
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 4
+ )
+        {
+            var query = _context.Schedules.AsQueryable();
+
+            // Kiểm tra và áp dụng điều kiện tìm kiếm theo searchQuery
+            if (!string.IsNullOrEmpty(searchQuery))
+            {
+                // Kiểm tra xem từ khóa có phải là số (để tìm kiếm theo RouteId hoặc TotalSeats)
+                if (int.TryParse(searchQuery, out int searchNumber))
+                {
+                    query = query.Where(s =>
+                        s.RouteId == searchNumber || // Tìm kiếm theo RouteId
+                        s.Bus.TotalSeats == searchNumber // Tìm kiếm theo TotalSeats
+                    );
+                }
+                else
+                {
+                    // Nếu không phải số, tìm kiếm theo thời gian (DepartureTime, ArrivalTime)
+                    query = query.Where(s =>
+                        s.DepartureTime.ToString().Contains(searchQuery) || // Tìm theo thời gian khởi hành
+                        s.ArrivalTime.ToString().Contains(searchQuery) // Tìm theo thời gian đến
+                    );
+                }
+            }
+
+            // Lấy tổng số bản ghi trong query trước khi áp dụng phân trang
+            var totalSchedules = await query.CountAsync();
+
+            // Tính toán số trang dựa trên số bản ghi và số bản ghi mỗi trang
+            var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
+
+            // Áp dụng phân trang
+            var schedules = await query
+                .Include(s => s.Route)
+                .Include(s => s.Bus)
+                .ThenInclude(b => b.BusType)
+                .Include(s => s.Bookings)
+                .Skip((page - 1) * pageSize) // Bỏ qua các bản ghi đã có ở các trang trước
+                .Take(pageSize) // Lấy số bản ghi theo pageSize
+                .Select(s => new
+                {
+                    s.RouteId,
+                    TotalSeats = s.Bus.TotalSeats,
+                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                    s.DepartureTime,
+                    s.ArrivalTime
+                })
+                .ToListAsync();
+
+            // Kiểm tra xem có lịch trình nào không
+            if (schedules.Count == 0)
+            {
+                return NotFound(new { message = "No schedules found matching the criteria." });
+            }
+
+            // Trả về kết quả với thông tin phân trang
+            var result = new
+            {
+                totalSchedules, // Tổng số bản ghi
+                totalPages,     // Tổng số trang
+                currentPage = page, // Trang hiện tại
+                pageSize,       // Số bản ghi mỗi trang
+                schedules       // Dữ liệu lịch trình
+            };
+
+            return Ok(result);
         }
 
 
