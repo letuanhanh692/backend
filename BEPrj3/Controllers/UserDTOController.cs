@@ -21,14 +21,14 @@
                 _context = context;
             }
 
-            // GET: api/UserDTO
-            [HttpGet]
-            public async Task<ActionResult<IEnumerable<UserDTO>>> GetUserDTO(int page = 1, int limit = 4)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<UserDTO>>> GetUserDTO(int page = 1, int limit = 4)
+        {
+            // Nếu page và limit đều là 0, lấy tất cả dữ liệu
+            if (page == 0 && limit == 0)
             {
-                var usersWithRoles = await _context.Users
+                var allUsersWithRoles = await _context.Users
                     .Include(u => u.Role)
-                    .Skip((page - 1) * limit)
-                    .Take(limit)
                     .Select(u => new UserDTO
                     {
                         Id = u.Id,
@@ -47,11 +47,37 @@
                     })
                     .ToListAsync();
 
-                return Ok(usersWithRoles);
+                return Ok(allUsersWithRoles);
             }
 
-            // GET: api/UserDTO/5
-            [HttpGet("{id}")]
+            // Nếu có page và limit, áp dụng phân trang
+            var usersWithRoles = await _context.Users
+                .Include(u => u.Role)
+                .Skip((page - 1) * limit)  // Bỏ qua các bản ghi trước trang hiện tại
+                .Take(limit)                // Lấy giới hạn số bản ghi cho trang hiện tại
+                .Select(u => new UserDTO
+                {
+                    Id = u.Id,
+                    Username = u.Username,
+                    Password = u.Password,
+                    Name = u.Name,
+                    Email = u.Email,
+                    Phone = u.Phone,
+                    Address = u.Address,
+                    IdCard = u.IdCard,
+                    DateOfBirth = u.DateOfBirth,
+                    Avatar = u.Avatar,
+                    RoleId = u.Role.Id,
+                    RoleName = u.Role.Name,
+                    CreatedAt = u.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(usersWithRoles);
+        }
+
+        // GET: api/UserDTO/5
+        [HttpGet("{id}")]
             public async Task<ActionResult<UserDTO>> GetUserDTO(int id)
             {
                 var userWithRole = await _context.Users

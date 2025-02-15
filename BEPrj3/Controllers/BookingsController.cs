@@ -21,18 +21,80 @@ namespace BEPrj3.Controllers
             _context = context;
         }
 
-        // GET: api/Bookings
-        // GET: api/Bookings
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Booking>>> GetBookings(int page = 1, int pageSize = 4)
+        public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetBookings(int page = 1, int pageSize = 4)
         {
+            // Nếu page và pageSize bằng 0, lấy tất cả các bản ghi
+            if (page == 0 && pageSize == 0)
+            {
+                var bookings = await _context.Bookings
+                    .ToListAsync();
+
+                var bookingResponses = bookings.Select(b => new BookingResponseDto
+                {
+                    BookingId = b.Id, // Đổi tên trường từ Id thành BookingId
+                    UserId = b.UserId,
+                    ScheduleId = b.ScheduleId,
+                    Name = b.Name,
+                    Age = b.Age,
+                    Phone = b.User?.Phone ?? "Unknown",
+                    Email = b.User?.Email ?? "Unknown",
+                    SeatNumber = b.SeatNumber,
+                    BookingDate = b.BookingDate ?? DateTime.MinValue,
+                    TotalAmount = b.TotalAmount,
+                    Status = b.Status,
+
+                    // Thông tin chuyến đi
+                    BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
+                    BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
+                    DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
+                    ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
+                    StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
+                    DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
+                    Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
+                }).ToList();
+
+                return Ok(new
+                {
+                    TotalRecords = bookingResponses.Count,
+                    TotalPages = 1, // Không có phân trang, chỉ có một trang
+                    CurrentPage = 1,
+                    PageSize = bookingResponses.Count,
+                    Bookings = bookingResponses
+                });
+            }
+
+            // Nếu pageSize khác 0 và page khác 0, thực hiện phân trang bình thường
             var totalRecords = await _context.Bookings.CountAsync(); // Tổng số bản ghi
             var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize); // Tính tổng số trang
 
-            var bookings = await _context.Bookings
+            var bookingsPaged = await _context.Bookings
                 .Skip((page - 1) * pageSize) // Bỏ qua các bản ghi trước trang hiện tại
                 .Take(pageSize) // Lấy số bản ghi theo kích thước trang
                 .ToListAsync();
+
+            var bookingResponsesPaged = bookingsPaged.Select(b => new BookingResponseDto
+            {
+                BookingId = b.Id,
+                UserId = b.UserId,
+                ScheduleId = b.ScheduleId,
+                Name = b.Name,
+                Age = b.Age,
+                Phone = b.User?.Phone ?? "Unknown",
+                Email = b.User?.Email ?? "Unknown",
+                SeatNumber = b.SeatNumber,
+                BookingDate = b.BookingDate ?? DateTime.MinValue,
+                TotalAmount = b.TotalAmount,
+                Status = b.Status,
+
+                BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
+                BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
+                DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
+                ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
+                StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
+                DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
+                Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
+            }).ToList();
 
             var response = new
             {
@@ -40,11 +102,12 @@ namespace BEPrj3.Controllers
                 TotalPages = totalPages,
                 CurrentPage = page,
                 PageSize = pageSize,
-                Bookings = bookings
+                Bookings = bookingResponsesPaged
             };
 
             return Ok(response);
         }
+
 
 
         // GET: api/Bookings/5
@@ -262,7 +325,7 @@ namespace BEPrj3.Controllers
             if (!string.IsNullOrEmpty(searchQuery))
             {
                 bookingsQuery = bookingsQuery.Where(b =>
-                    b.User.Name.Contains(searchQuery) ||  // Tìm theo tên người dùng
+                    b.Name.Contains(searchQuery) ||  // Tìm theo tên người dùng
                     b.SeatNumber.ToString().Contains(searchQuery) ||  // Tìm theo số ghế đặt
                     b.TotalAmount.ToString().Contains(searchQuery) || // Tìm theo số tiền thanh toán
                     b.Status.Contains(searchQuery)  // Tìm theo trạng thái
@@ -286,7 +349,7 @@ namespace BEPrj3.Controllers
                 BookingDate = (DateTime)b.BookingDate,
                 TotalAmount = b.TotalAmount,
                 Status = b.Status,
-                Name = b.User.Name,
+                Name = b.Name,
                 Phone = b.User.Phone,
                 Email = b.User.Email,
                 BusNumber = b.Schedule.Bus.BusNumber,
@@ -298,7 +361,6 @@ namespace BEPrj3.Controllers
                 Distance = (double)b.Schedule.Route.Distance
             }).ToList();
 
-            // Trả về kết quả và thông tin phân trang (ví dụ tổng số bản ghi)
             var paginationResult = new
             {
                 TotalRecords = totalRecords,

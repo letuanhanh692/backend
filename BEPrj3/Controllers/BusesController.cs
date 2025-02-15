@@ -25,8 +25,20 @@ namespace BEPrj3.Controllers
 
         // 📌 GET: Lấy danh sách tất cả xe bus
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Bus>>> GetBuses(int page = 1, int pageSize = 5)
+        public async Task<ActionResult<IEnumerable<Bus>>> GetBuses(int page = 1, int pageSize = 4)
         {
+            // Nếu page và pageSize bằng 0, lấy tất cả dữ liệu
+            if (page == 0 && pageSize == 0)
+            {
+                var allBuses = await _context.Buses.ToListAsync();
+                return Ok(new
+                {
+                    Buses = allBuses,
+                    TotalPages = 1,  // Vì đã lấy tất cả nên chỉ có một trang
+                    CurrentPage = 1
+                });
+            }
+
             // Lấy tổng số bản ghi
             var totalCount = await _context.Buses.CountAsync();
 
@@ -49,7 +61,7 @@ namespace BEPrj3.Controllers
         }
 
 
-        // 📌 GET: Lấy thông tin chi tiết 1 xe bus
+
         // 📌 GET: Lấy thông tin chi tiết 1 xe bus
         [HttpGet("{id}")]
         public async Task<ActionResult<Bus>> GetBus(int id)
