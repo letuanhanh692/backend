@@ -100,6 +100,7 @@ namespace BEPrj3.Controllers
                 Price = price,
                 ImageBus = schedule.Bus.ImageBus
             };
+            // push code demo checkout
 
             return Ok(scheduleDetails);
         }
