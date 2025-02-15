@@ -22,10 +22,42 @@ namespace BEPrj3.Controllers
         }
 
         // GET: api/Schedules
-        // GET: api/Schedules
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
         {
+            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi
+            if (page == 0 && pageSize == 0)
+            {
+                var allSchedules = await _context.Schedules
+                    .Include(s => s.Route)
+                    .Include(s => s.Bus)
+                    .ThenInclude(b => b.BusType)
+                    .Include(s => s.Bookings)
+                    .Select(s => new
+                    {
+                        s.Id,
+                        RouteId = s.Route.Id,
+                        BusNumber = s.Bus.BusNumber,
+                        BusType = s.Bus.BusType.TypeName,
+                        TotalSeats = s.Bus.TotalSeats,
+                        AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                        s.DepartureTime,
+                        s.ArrivalTime,
+                        ImageBus = s.Bus.ImageBus
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    totalSchedules = allSchedules.Count,
+                    totalPages = 1, // Vì lấy tất cả nên chỉ có 1 trang
+                    currentPage = 1,
+                    pageSize = allSchedules.Count, // Tất cả bản ghi
+                    schedules = allSchedules
+                });
+            }
+
+            // Nếu không phải trường hợp lấy tất cả thì thực hiện phân trang
             var schedules = await _context.Schedules
                 .Include(s => s.Route)
                 .Include(s => s.Bus)
@@ -61,6 +93,7 @@ namespace BEPrj3.Controllers
 
             return Ok(result);
         }
+
 
 
         // GET: api/Schedules/5
