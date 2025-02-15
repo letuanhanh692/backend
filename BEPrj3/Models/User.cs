@@ -7,7 +7,7 @@ public partial class User
 {
     public int Id { get; set; }
 
-    public string Username { get; set; } = null!;
+    public string Username { get; set; } = string.Empty;
 
     public string Password { get; set; } = null!;
 
@@ -15,13 +15,12 @@ public partial class User
 
     public string Email { get; set; } = null!;
 
-    public string? Phone { get; set; }
+    public string? Phone { get; set; } = string.Empty;
 
     public string? Address { get; set; }
+    public string? IdCard { get; set; } = string.Empty;
 
-    public string? IdCard { get; set; }
-
-    public DateOnly? DateOfBirth { get; set; }
+    public DateOnly? DateOfBirth { get; set; } = DateOnly.FromDateTime(DateTime.Now);
 
     public string? Avatar { get; set; }
 

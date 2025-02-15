@@ -35,18 +35,19 @@ namespace BEPrj3.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterUserModel model)
         {
-            if (string.IsNullOrWhiteSpace(model.Username) ||
+            if (
                 string.IsNullOrWhiteSpace(model.Password) ||
                 string.IsNullOrWhiteSpace(model.Name) ||
                 string.IsNullOrWhiteSpace(model.Phone) ||
-                string.IsNullOrWhiteSpace(model.Email))
+                string.IsNullOrWhiteSpace(model.Email) ||
+                string.IsNullOrWhiteSpace(model.Address) ||
+                string.IsNullOrWhiteSpace(model.IdCard) ||
+                model.DateOfBirth == null)
             {
                 return BadRequest("All fields are required.");
             }
 
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == model.Email);
-
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
             if (existingUser != null)
             {
                 return BadRequest("Email already exists.");
@@ -54,8 +55,6 @@ namespace BEPrj3.Controllers
 
             // Đặt RoleId mặc định là 3 (Customer)
             int defaultRoleId = 3;
-
-            // Kiểm tra xem RoleId = 3 có tồn tại trong bảng Role không
             var roleExists = await _context.Roles.AnyAsync(r => r.Id == defaultRoleId);
             if (!roleExists)
             {
@@ -64,12 +63,15 @@ namespace BEPrj3.Controllers
 
             var newUser = new User
             {
-                Username = model.Username,
+                
                 Password = model.Password,
                 Name = model.Name,
                 Phone = model.Phone,
                 Email = model.Email,
-                RoleId = defaultRoleId, // Luôn đặt RoleId = 3
+                Address = model.Address,
+                IdCard = model.IdCard,
+                DateOfBirth = model.DateOfBirth, 
+                RoleId = defaultRoleId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -79,25 +81,102 @@ namespace BEPrj3.Controllers
             return Ok(new { message = "User registered successfully." });
         }
 
-
-
-
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginUserModel model)
         {
-            //var user = await _userManager.FindByNameAsync(model.Username);
-            //var User = await _context.Users.FirstOrDefaultAsync(a => a.Email == model.Email
-            //                                                           && a.Password == model.Password);
             var user = await _context.Users
-           .FirstOrDefaultAsync(a => a.Username == model.Username && a.Password == model.Password);
-            if (User == null)
+                .FirstOrDefaultAsync(a => a.Email == model.Email && a.Password == model.Password);
+
+            if (user == null)
                 return Unauthorized("Invalid credentials");
 
             var authClaims = new List<Claim>
+    {
+        new Claim(ClaimTypes.Name, user.Email),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim("userId", user.Id.ToString()) // ✅ Thêm userId vào token
+    };
+
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("YourSecretKeyHereYourSecretKeyHere"));
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                expires: DateTime.Now.AddHours(3),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            );
+
+            return Ok(new
             {
-                new Claim(ClaimTypes.Name, model.Username),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                token = new JwtSecurityTokenHandler().WriteToken(token),
+                expiration = token.ValidTo
+            });
+        }
+
+        [HttpPost("register-staff")]
+        public async Task<IActionResult> RegisterStaff([FromBody] RegisterUserModel model)
+        {
+            if (
+                string.IsNullOrWhiteSpace(model.Password) ||
+                string.IsNullOrWhiteSpace(model.Name) ||
+                string.IsNullOrWhiteSpace(model.Phone) ||
+                string.IsNullOrWhiteSpace(model.Email) ||
+                string.IsNullOrWhiteSpace(model.Address) ||
+                string.IsNullOrWhiteSpace(model.IdCard) ||
+                model.DateOfBirth == null)
+            {
+                return BadRequest("All fields are required.");
+            }
+
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+            if (existingUser != null)
+            {
+                return BadRequest("Email already exists.");
+            }
+
+            // Đặt RoleId mặc định là 3 (Customer)
+            int defaultRoleId = 2;
+            var roleExists = await _context.Roles.AnyAsync(r => r.Id == defaultRoleId);
+            if (!roleExists)
+            {
+                return BadRequest("Default RoleId does not exist.");
+            }
+
+            var newUser = new User
+            {
+
+                Password = model.Password,
+                Name = model.Name,
+                Phone = model.Phone,
+                Email = model.Email,
+                Address = model.Address,
+                IdCard = model.IdCard,
+                DateOfBirth = model.DateOfBirth,
+                RoleId = defaultRoleId,
+                CreatedAt = DateTime.UtcNow
             };
+
+            _context.Users.Add(newUser);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "User registered successfully." });
+        }
+        [HttpPost("login-staff")]
+        public async Task<IActionResult> LoginStaff([FromBody] LoginUserModel model)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(a => a.Email == model.Email && a.Password == model.Password);
+
+            if (user == null)
+                return Unauthorized("Invalid credentials");
+
+            var authClaims = new List<Claim>
+    {
+        new Claim(ClaimTypes.Name, user.Email),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim("userId", user.Id.ToString()) // ✅ Thêm userId vào token
+    };
 
             var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("YourSecretKeyHereYourSecretKeyHere"));
 

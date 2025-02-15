@@ -22,43 +22,45 @@ namespace BEPrj3.Controllers
         }
 
         // GET: api/Schedules
-       // GET: api/Schedules
-[HttpGet]
-public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
-{
-    var schedules = await _context.Schedules
-        .Include(s => s.Route)
-        .Include(s => s.Bookings)
-        .Skip((page - 1) * pageSize) // Bỏ qua số bản ghi trước đó
-        .Take(pageSize) // Lấy số bản ghi theo pageSize
-        .Select(s => new
+        // GET: api/Schedules
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
         {
-            s.Id,
-            RouteId = s.Route.Id,
-            TotalSeats = s.Bus.TotalSeats,
-            AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
-            s.DepartureTime,
-            s.ArrivalTime
-        })
-        .ToListAsync();
+            var schedules = await _context.Schedules
+                .Include(s => s.Route)
+                .Include(s => s.Bus)
+                .ThenInclude(b => b.BusType)
+                .Include(s => s.Bookings)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(s => new
+                {
+                    s.Id,
+                    RouteId = s.Route.Id,
+                    BusNumber = s.Bus.BusNumber,
+                    BusType = s.Bus.BusType.TypeName,
+                    TotalSeats = s.Bus.TotalSeats,
+                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                    s.DepartureTime,
+                    s.ArrivalTime,
+                    ImageBus = s.Bus.ImageBus
+                })
+                .ToListAsync();
 
-    // Lấy tổng số bản ghi để trả về tổng số trang
-    var totalSchedules = await _context.Schedules.CountAsync();
+            var totalSchedules = await _context.Schedules.CountAsync();
+            var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
 
-    // Tính số trang
-    var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
+            var result = new
+            {
+                totalSchedules,
+                totalPages,
+                currentPage = page,
+                pageSize,
+                schedules
+            };
 
-    var result = new
-    {
-        totalSchedules,
-        totalPages,
-        currentPage = page,
-        pageSize,
-        schedules
-    };
-
-    return Ok(result);
-}
+            return Ok(result);
+        }
 
 
         // GET: api/Schedules/5
@@ -68,9 +70,9 @@ public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] in
             var schedule = await _context.Schedules
                 .Include(s => s.Route)
                 .Include(s => s.Bus)
-                .ThenInclude(b => b.BusType) // Join bảng BusType
-                .Include(s => s.Bookings) // Join bảng Booking để tính số ghế đã đặt
-                .Include(s => s.Route.PriceLists) // Join bảng PriceList để lấy giá
+                .ThenInclude(b => b.BusType)
+                .Include(s => s.Bookings)
+                .Include(s => s.Route.PriceLists)
                 .FirstOrDefaultAsync(s => s.Id == id);
 
             if (schedule == null)
@@ -78,7 +80,6 @@ public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] in
                 return NotFound(new { message = "Schedule not found." });
             }
 
-            // Lấy giá của PriceList dựa trên BusTypeId
             var price = schedule.Route.PriceLists
                 .Where(p => p.BusTypeId == schedule.Bus.BusTypeId)
                 .Select(p => p.Price)
@@ -88,15 +89,16 @@ public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] in
             {
                 schedule.Id,
                 BusNumber = schedule.Bus.BusNumber,
-                BusType = schedule.Bus.BusType.TypeName, // Lấy tên hạng xe
-                TotalSeats = schedule.Bus.TotalSeats, // Tổng số ghế
-                AvailableSeats = schedule.Bus.TotalSeats - schedule.Bookings.Sum(b => b.SeatNumber), // Tính số ghế còn lại
+                BusType = schedule.Bus.BusType.TypeName,
+                TotalSeats = schedule.Bus.TotalSeats,
+                AvailableSeats = schedule.Bus.TotalSeats - schedule.Bookings.Sum(b => b.SeatNumber),
                 schedule.DepartureTime,
                 schedule.ArrivalTime,
                 schedule.Route.StartingPlace,
                 schedule.Route.DestinationPlace,
-                schedule.Route.Distance, // Cách nhau
-                Price = price // Trả về giá
+                schedule.Route.Distance,
+                Price = price,
+                ImageBus = schedule.Bus.ImageBus
             };
 
             return Ok(scheduleDetails);
@@ -223,7 +225,7 @@ public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] in
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
-                .Include(s => s.Route.PriceLists) // Thêm PriceList vào
+                .Include(s => s.Route.PriceLists)
                 .Where(s => s.Route.StartingPlace == startingPlace
                             && s.Route.DestinationPlace == destinationPlace
                             && (!departureDateTime.HasValue || s.DepartureTime.Date == departureDateTime.Value.Date))
@@ -241,7 +243,8 @@ public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] in
                     Price = s.Route.PriceLists
                         .Where(p => p.BusTypeId == s.Bus.BusTypeId)
                         .Select(p => p.Price)
-                        .FirstOrDefault() // Lấy giá phù hợp với BusTypeId
+                        .FirstOrDefault(),
+                    ImageBus = s.Bus.ImageBus // Trả về hình ảnh của Bus
                 })
                 .ToListAsync();
 
