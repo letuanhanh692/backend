@@ -27,10 +27,39 @@ namespace BEPrj3.Controllers
             // Tính tổng số bản ghi trong cơ sở dữ liệu
             var totalItems = await _context.Routes.CountAsync();
 
-            // Chỉ lấy dữ liệu của trang hiện tại
+            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi
+            if (page == 0 && pageSize == 0)
+            {
+                var allRoutes = await _context.Routes
+                    .Include(r => r.StaffRoutes)
+                    .ThenInclude(sr => sr.Staff)
+                    .ToListAsync();
+
+                var allRouteDTOs = allRoutes.Select(route => new RouteDTO
+                {
+                    Id = route.Id,
+                    StartingPlace = route.StartingPlace,
+                    DestinationPlace = route.DestinationPlace,
+                    Distance = route.Distance,
+                    PriceRoute = route.PriceRoute ?? 0,
+                    StaffId = route.StaffRoutes.FirstOrDefault()?.StaffId ?? 0,
+                    StaffName = route.StaffRoutes.FirstOrDefault()?.Staff.Name ?? "N/A",
+                    StaffEmail = route.StaffRoutes.FirstOrDefault()?.Staff.Email ?? "N/A"
+                }).ToList();
+
+                var resultAll = new
+                {
+                    TotalItems = totalItems,
+                    CurrentPage = 1,
+                    Routes = allRouteDTOs
+                };
+
+                return Ok(resultAll);
+            }
+
+            // Chỉ lấy dữ liệu của trang hiện tại nếu không phải lấy tất cả
             var skip = (page - 1) * pageSize;
 
-            // Lấy danh sách tuyến đường, chỉ lấy 4 tuyến đường mỗi trang
             var routes = await _context.Routes
                 .Include(r => r.StaffRoutes)
                 .ThenInclude(sr => sr.Staff)
@@ -38,7 +67,6 @@ namespace BEPrj3.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Ánh xạ dữ liệu từ Route sang RouteDTO
             var routeDTOs = routes.Select(route => new RouteDTO
             {
                 Id = route.Id,
@@ -51,7 +79,6 @@ namespace BEPrj3.Controllers
                 StaffEmail = route.StaffRoutes.FirstOrDefault()?.Staff.Email ?? "N/A"
             }).ToList();
 
-            // Trả về kết quả với dữ liệu của trang hiện tại và tổng số bản ghi
             var result = new
             {
                 TotalItems = totalItems,  // Tổng số bản ghi
@@ -61,6 +88,7 @@ namespace BEPrj3.Controllers
 
             return Ok(result);
         }
+
 
 
         // GET: api/Route/5
