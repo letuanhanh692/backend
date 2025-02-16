@@ -141,14 +141,36 @@ namespace BEPrj3.Controllers
         // PUT: api/Schedules/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutSchedule(int id, Schedule schedule)
+        public async Task<IActionResult> PutSchedule(int id, [FromBody] ScheduleRequest scheduleRequest)
         {
-            if (id != schedule.Id)
+            var schedule = await _context.Schedules.FindAsync(id);
+            if (schedule == null)
             {
-                return BadRequest();
+                return NotFound(new { message = "Schedule not found." });
             }
 
-            _context.Entry(schedule).State = EntityState.Modified;
+            var bus = await _context.Buses.FindAsync(scheduleRequest.BusId);
+            var route = await _context.Routes.FindAsync(scheduleRequest.RouteId);
+
+            if (bus == null)
+            {
+                return NotFound(new { message = "Bus not found." });
+            }
+
+            if (route == null)
+            {
+                return NotFound(new { message = "Route not found." });
+            }
+
+            if (scheduleRequest.ArrivalTime <= scheduleRequest.DepartureTime)
+            {
+                return BadRequest(new { message = "ArrivalTime must be later than DepartureTime." });
+            }
+
+            schedule.BusId = scheduleRequest.BusId;
+            schedule.RouteId = scheduleRequest.RouteId;
+            schedule.DepartureTime = scheduleRequest.DepartureTime;
+            schedule.ArrivalTime = scheduleRequest.ArrivalTime;
 
             try
             {
@@ -158,7 +180,7 @@ namespace BEPrj3.Controllers
             {
                 if (!ScheduleExists(id))
                 {
-                    return NotFound();
+                    return NotFound(new { message = "Schedule not found during update." });
                 }
                 else
                 {
@@ -166,7 +188,7 @@ namespace BEPrj3.Controllers
                 }
             }
 
-            return NoContent();
+            return Ok(new { message = "Schedule updated successfully." });
         }
 
         // POST: api/Schedules
