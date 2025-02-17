@@ -19,6 +19,8 @@ public partial class Schedule
 
     public int AvailableSeats { get; set; }
 
+    public decimal? Price { get; set; }
+
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 
     public virtual Bus? Bus { get; set; } = null!;
