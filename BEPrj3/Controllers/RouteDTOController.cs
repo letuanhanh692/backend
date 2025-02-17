@@ -20,19 +20,20 @@ namespace BEPrj3.Controllers
             _context = context;
         }
 
-        // GET: api/Route
+        // 📌 GET: api/Route
         [HttpGet]
         public async Task<ActionResult<IEnumerable<RouteDTO>>> GetRoutes(int page = 1, int pageSize = 4)
         {
             // Tính tổng số bản ghi trong cơ sở dữ liệu
             var totalItems = await _context.Routes.CountAsync();
 
-            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi
+            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi và sắp xếp mới nhất lên trước
             if (page == 0 && pageSize == 0)
             {
                 var allRoutes = await _context.Routes
                     .Include(r => r.StaffRoutes)
                     .ThenInclude(sr => sr.Staff)
+                    .OrderByDescending(r => r.Id) // Sắp xếp mới nhất lên trước
                     .ToListAsync();
 
                 var allRouteDTOs = allRoutes.Select(route => new RouteDTO
@@ -63,6 +64,7 @@ namespace BEPrj3.Controllers
             var routes = await _context.Routes
                 .Include(r => r.StaffRoutes)
                 .ThenInclude(sr => sr.Staff)
+                .OrderByDescending(r => r.Id) // Sắp xếp mới nhất lên trước
                 .Skip(skip)
                 .Take(pageSize)
                 .ToListAsync();
@@ -88,7 +90,6 @@ namespace BEPrj3.Controllers
 
             return Ok(result);
         }
-
 
 
         // GET: api/Route/5
@@ -234,15 +235,14 @@ namespace BEPrj3.Controllers
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<RouteDTO>>> SearchRoutes(int page = 1, int pageSize = 4, string searchQuery = "")
         {
-            // Tính tổng số bản ghi trong cơ sở dữ liệu có chứa searchQuery trong cả StartingPlace và DestinationPlace
             var totalItems = await _context.Routes
                 .Where(r => r.StartingPlace.Contains(searchQuery) || r.DestinationPlace.Contains(searchQuery))
                 .CountAsync();
 
-            // Chỉ lấy dữ liệu của trang hiện tại
+            var totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+
             var skip = (page - 1) * pageSize;
 
-            // Lấy danh sách tuyến đường, chỉ lấy 4 tuyến đường mỗi trang và lọc theo searchQuery
             var routes = await _context.Routes
                 .Where(r => r.StartingPlace.Contains(searchQuery) || r.DestinationPlace.Contains(searchQuery))
                 .Include(r => r.StaffRoutes)
@@ -251,7 +251,6 @@ namespace BEPrj3.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Ánh xạ dữ liệu từ Route sang RouteDTO
             var routeDTOs = routes.Select(route => new RouteDTO
             {
                 Id = route.Id,
@@ -264,16 +263,17 @@ namespace BEPrj3.Controllers
                 StaffEmail = route.StaffRoutes.FirstOrDefault()?.Staff.Email ?? "N/A"
             }).ToList();
 
-            // Trả về kết quả với dữ liệu của trang hiện tại và tổng số bản ghi
             var result = new
             {
                 TotalItems = totalItems,  // Tổng số bản ghi
-                CurrentPage = page,
-                Routes = routeDTOs
+                TotalPages = totalPages,  // Tổng số trang
+                CurrentPage = page,       // Trang hiện tại
+                Routes = routeDTOs        // Dữ liệu tuyến đường
             };
 
             return Ok(result);
         }
+
 
     }
 }

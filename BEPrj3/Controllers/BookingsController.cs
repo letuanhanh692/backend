@@ -28,6 +28,9 @@ namespace BEPrj3.Controllers
             if (page == 0 && pageSize == 0)
             {
                 var bookings = await _context.Bookings
+                      .OrderByDescending(b => b.Id)
+                       .Skip((page - 1) * pageSize)  
+                        .Take(pageSize)               
                     .ToListAsync();
 
                 var bookingResponses = bookings.Select(b => new BookingResponseDto
@@ -69,9 +72,10 @@ namespace BEPrj3.Controllers
             var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize); // Tính tổng số trang
 
             var bookingsPaged = await _context.Bookings
-                .Skip((page - 1) * pageSize) // Bỏ qua các bản ghi trước trang hiện tại
-                .Take(pageSize) // Lấy số bản ghi theo kích thước trang
-                .ToListAsync();
+                .OrderByDescending(b => b.Id) // Sắp xếp giảm dần để bản ghi mới nhất lên đầu
+                 .Skip((page - 1) * pageSize)  // Bỏ qua các bản ghi trước trang hiện tại
+                 .Take(pageSize)               // Lấy số bản ghi theo kích thước trang
+                  .ToListAsync();
 
             var bookingResponsesPaged = bookingsPaged.Select(b => new BookingResponseDto
             {

@@ -13,5 +13,5 @@ public partial class Cancellation
 
     public decimal RefundAmount { get; set; }
 
-    public virtual Booking Booking { get; set; } = null!;
+    public virtual Booking? Booking { get; set; } = null!;
 }
