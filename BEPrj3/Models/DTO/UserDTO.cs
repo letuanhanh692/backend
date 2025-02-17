@@ -28,6 +28,6 @@
 
         public string? RoleName { get; set; }
 
-        //public int? RouteId { get; set; }
+       
     }
 }
