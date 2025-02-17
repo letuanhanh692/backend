@@ -24,11 +24,12 @@
         [HttpGet]
         public async Task<ActionResult<IEnumerable<UserDTO>>> GetUserDTO(int page = 1, int limit = 4)
         {
-            // Nếu page và limit đều là 0, lấy tất cả dữ liệu
+            // Nếu page và limit đều là 0, lấy tất cả dữ liệu và sắp xếp mới nhất lên trước
             if (page == 0 && limit == 0)
             {
                 var allUsersWithRoles = await _context.Users
                     .Include(u => u.Role)
+                    .OrderByDescending(u => u.CreatedAt) // Sắp xếp mới nhất lên trước
                     .Select(u => new UserDTO
                     {
                         Id = u.Id,
@@ -50,11 +51,12 @@
                 return Ok(allUsersWithRoles);
             }
 
-            // Nếu có page và limit, áp dụng phân trang
+            // Nếu có page và limit, áp dụng sắp xếp trước khi phân trang
             var usersWithRoles = await _context.Users
                 .Include(u => u.Role)
+                .OrderByDescending(u => u.CreatedAt) // Sắp xếp mới nhất lên trước
                 .Skip((page - 1) * limit)  // Bỏ qua các bản ghi trước trang hiện tại
-                .Take(limit)                // Lấy giới hạn số bản ghi cho trang hiện tại
+                .Take(limit)               // Lấy giới hạn số bản ghi cho trang hiện tại
                 .Select(u => new UserDTO
                 {
                     Id = u.Id,

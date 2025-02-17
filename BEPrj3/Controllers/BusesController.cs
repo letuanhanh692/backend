@@ -27,10 +27,11 @@ namespace BEPrj3.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Bus>>> GetBuses(int page = 1, int pageSize = 4)
         {
-            // Nếu page và pageSize bằng 0, lấy tất cả dữ liệu
             if (page == 0 && pageSize == 0)
             {
-                var allBuses = await _context.Buses.ToListAsync();
+                var allBuses = await _context.Buses
+                    .OrderByDescending(b => b.Id) // Sắp xếp bản ghi mới nhất lên trước
+                    .ToListAsync();
                 return Ok(new
                 {
                     Buses = allBuses,
@@ -39,19 +40,16 @@ namespace BEPrj3.Controllers
                 });
             }
 
-            // Lấy tổng số bản ghi
             var totalCount = await _context.Buses.CountAsync();
 
-            // Tính tổng số trang
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-            // Lấy danh sách xe bus trong phạm vi phân trang
             var buses = await _context.Buses
+                .OrderByDescending(b => b.Id) 
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Trả về kết quả cùng với thông tin tổng số trang
             return Ok(new
             {
                 Buses = buses,

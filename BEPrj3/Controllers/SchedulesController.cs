@@ -21,11 +21,11 @@ namespace BEPrj3.Controllers
             _context = context;
         }
 
-        // GET: api/Schedules
+        // 📌 GET: api/Schedules
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
         {
-            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi
+            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi và sắp xếp mới nhất lên trước
             if (page == 0 && pageSize == 0)
             {
                 var allSchedules = await _context.Schedules
@@ -66,6 +66,7 @@ namespace BEPrj3.Controllers
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
+                .OrderByDescending(s => s.Id) // Sắp xếp mới nhất lên trước
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(s => new
@@ -399,13 +400,10 @@ namespace BEPrj3.Controllers
                 }
             }
 
-            // Lấy tổng số bản ghi trong query trước khi áp dụng phân trang
             var totalSchedules = await query.CountAsync();
 
-            // Tính toán số trang dựa trên số bản ghi và số bản ghi mỗi trang
             var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
 
-            // Áp dụng phân trang
             var schedules = await query
                 .Include(s => s.Route)
                 .Include(s => s.Bus)
@@ -423,7 +421,6 @@ namespace BEPrj3.Controllers
                 })
                 .ToListAsync();
 
-            // Kiểm tra xem có lịch trình nào không
             if (schedules.Count == 0)
             {
                 return NotFound(new { message = "No schedules found matching the criteria." });

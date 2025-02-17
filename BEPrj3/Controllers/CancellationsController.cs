@@ -22,36 +22,118 @@ namespace BEPrj3.Controllers
 
         // GET: api/Cancellations
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Cancellation>>> GetCancellations()
+        public async Task<ActionResult<IEnumerable<Cancellation>>> GetCancellations(int page = 1, int pageSize = 7)
         {
-            return await _context.Cancellations.ToListAsync();
-        }
-
-        // GET: api/Cancellations/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Cancellation>> GetCancellation(int id)
-        {
-            var cancellation = await _context.Cancellations.FindAsync(id);
-
-            if (cancellation == null)
+            if (page == 0 && pageSize == 0)
             {
-                return NotFound();
+                var allCancellations = await _context.Cancellations
+                    .OrderByDescending(c => c.Id) // Sắp xếp mới nhất lên trước
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    Cancellations = allCancellations,
+                    TotalPages = 1,
+                    CurrentPage = 1
+                });
             }
 
-            return cancellation;
+            var totalCount = await _context.Cancellations.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var cancellations = await _context.Cancellations
+                .OrderByDescending(c => c.Id)  // Sắp xếp mới nhất lên trước
+                .Skip((page - 1) * pageSize)   // Bỏ qua các bản ghi trước trang hiện tại
+                .Take(pageSize)                // Lấy giới hạn số bản ghi cho trang hiện tại
+                .ToListAsync();
+
+            return Ok(new
+            {
+                Cancellations = cancellations,
+                TotalPages = totalPages,
+                CurrentPage = page
+            });
         }
 
-        // PUT: api/Cancellations/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutCancellation(int id, Cancellation cancellation)
+
+
+        // GET: api/Cancellations/Detail/{id}
+        [HttpGet("{id}")]
+        public async Task<ActionResult<object>> GetCancellationDetail(int id)
         {
-            if (id != cancellation.Id)
+            var cancellationDetail = await _context.Cancellations
+                .Include(c => c.Booking)
+                    .ThenInclude(b => b.User)
+                .Include(c => c.Booking.Schedule)
+                    .ThenInclude(s => s.Route)
+                .Include(c => c.Booking.Schedule.Bus)
+                    .ThenInclude(b => b.BusType)
+                .Where(c => c.Id == id)
+                .Select(c => new
+                {
+                    CancellationId = c.Id,
+                    CancellationDate = c.CancellationDate,
+                    RefundAmount = c.RefundAmount,
+                    BookingId = c.BookingId,
+                    Name = c.Booking.Name,
+                    Age = c.Booking.Age,
+                    Phone = c.Booking.User.Phone,
+                    Email = c.Booking.User.Email,
+                    SeatNumber = c.Booking.SeatNumber,
+                    BookingDate = c.Booking.BookingDate,
+                    TotalAmount = c.Booking.TotalAmount,
+                    Status = c.Booking.Status,
+                    BusNumber = c.Booking.Schedule.Bus.BusNumber,
+                    BusType = c.Booking.Schedule.Bus.BusType.TypeName,
+                    DepartTime = c.Booking.Schedule.DepartureTime,
+                    ArrivalTime = c.Booking.Schedule.ArrivalTime,
+                    StartingPlace = c.Booking.Schedule.Route.StartingPlace,
+                    DestinationPlace = c.Booking.Schedule.Route.DestinationPlace,
+                    Distance = c.Booking.Schedule.Route.Distance,
+                    UserId = c.Booking.User.Id,
+                    ScheduleId = c.Booking.ScheduleId
+                })
+                .FirstOrDefaultAsync();
+
+            if (cancellationDetail == null)
+            {
+                return NotFound(new { Message = "No details found for the given Cancellation ID." });
+            }
+
+            return Ok(cancellationDetail);
+        }
+
+
+        // PUT: api/Cancellations/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutCancellation(int id, [FromBody] Cancellation updatedCancellation)
+        {
+            if (id != updatedCancellation.Id)
             {
                 return BadRequest();
             }
 
-            _context.Entry(cancellation).State = EntityState.Modified;
+            var existingCancellation = await _context.Cancellations.FindAsync(id);
+            if (existingCancellation == null)
+            {
+                return NotFound();
+            }
+
+            // Cập nhật các trường cần thiết
+            existingCancellation.BookingId = updatedCancellation.BookingId;
+            existingCancellation.CancellationDate = updatedCancellation.CancellationDate;
+            existingCancellation.RefundAmount = updatedCancellation.RefundAmount;
+
+            // Lấy thông tin `Booking` từ `BookingId`
+            var booking = await _context.Bookings.FindAsync(updatedCancellation.BookingId);
+            if (booking == null)
+            {
+                return BadRequest(new { Message = "Booking không tồn tại." });
+            }
+            existingCancellation.Booking = booking;
+
+            // Đánh dấu là đã chỉnh sửa
+            _context.Entry(existingCancellation).State = EntityState.Modified;
 
             try
             {
@@ -71,6 +153,7 @@ namespace BEPrj3.Controllers
 
             return NoContent();
         }
+
 
         // POST: api/Cancellations
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
