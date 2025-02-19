@@ -33,6 +33,7 @@ namespace BEPrj3.Controllers
                     .Include(s => s.Bus)
                     .ThenInclude(b => b.BusType)
                     .Include(s => s.Bookings)
+                    .OrderByDescending(s => s.Id) // Sắp xếp mới nhất lên trước
                     
                     .Select(s => new
                     {

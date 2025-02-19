@@ -274,5 +274,12 @@
 
                 return Ok(new { users, totalPages });
             }
+        [HttpGet("check-email")]
+        public async Task<IActionResult> CheckEmailExists([FromQuery] string email)
+        {
+            var userExists = await _context.Users.AnyAsync(u => u.Email == email);
+            return Ok(userExists);
         }
+
     }
+}
