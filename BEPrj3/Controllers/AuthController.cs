@@ -230,6 +230,7 @@ namespace BEPrj3.Controllers
                             seatNumber = b.SeatNumber,
                             age = b.Age,
                             bookingDate = b.BookingDate,
+                            status = b.Status,
                             totalAmount = b.TotalAmount
                         }).ToList()
                     }).ToList()

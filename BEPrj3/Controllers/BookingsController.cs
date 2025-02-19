@@ -29,13 +29,11 @@ namespace BEPrj3.Controllers
             {
                 var bookings = await _context.Bookings
                       .OrderByDescending(b => b.Id)
-                       .Skip((page - 1) * pageSize)  
-                        .Take(pageSize)               
                     .ToListAsync();
 
                 var bookingResponses = bookings.Select(b => new BookingResponseDto
                 {
-                    BookingId = b.Id, // Đổi tên trường từ Id thành BookingId
+                    BookingId = b.Id,
                     UserId = b.UserId,
                     ScheduleId = b.ScheduleId,
                     Name = b.Name,
@@ -47,8 +45,8 @@ namespace BEPrj3.Controllers
                     TotalAmount = b.TotalAmount,
                     Status = b.Status,
 
-                    // Thông tin chuyến đi
-                    BusNumber = b.Schedule.Bus.BusNumber,
+                    // Kiểm tra null trước khi truy xuất dữ liệu
+                    BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
                     BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
                     DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
                     ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
@@ -57,10 +55,11 @@ namespace BEPrj3.Controllers
                     Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
                 }).ToList();
 
+
                 return Ok(new
                 {
                     TotalRecords = bookingResponses.Count,
-                    TotalPages = 1, // Không có phân trang, chỉ có một trang
+                    TotalPages = 1, 
                     CurrentPage = 1,
                     PageSize = bookingResponses.Count,
                     Bookings = bookingResponses
