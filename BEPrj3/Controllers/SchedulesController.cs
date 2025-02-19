@@ -25,7 +25,6 @@ namespace BEPrj3.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetSchedules([FromQuery] int page = 1, [FromQuery] int pageSize = 4)
         {
-            // Nếu page = 0 và pageSize = 0 thì lấy tất cả bản ghi và sắp xếp mới nhất lên trước
             if (page == 0 && pageSize == 0)
             {
                 var allSchedules = await _context.Schedules
@@ -33,7 +32,7 @@ namespace BEPrj3.Controllers
                     .Include(s => s.Bus)
                     .ThenInclude(b => b.BusType)
                     .Include(s => s.Bookings)
-                    .OrderByDescending(s => s.Id) // Sắp xếp mới nhất lên trước
+                    .OrderByDescending(s => s.Id) 
                     
                     .Select(s => new
                     {
@@ -45,6 +44,7 @@ namespace BEPrj3.Controllers
                         AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
                         s.DepartureTime,
                         s.ArrivalTime,
+                        s.Date,
                         // Tính giá từ PriceLists của Route
                         Price = s.Price,
                         ImageBus = s.Bus.ImageBus
@@ -67,7 +67,7 @@ namespace BEPrj3.Controllers
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
-                .OrderByDescending(s => s.Id) // Sắp xếp mới nhất lên trước
+                .OrderByDescending(s => s.Id) 
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(s => new
@@ -80,6 +80,8 @@ namespace BEPrj3.Controllers
                     AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
                     s.DepartureTime,
                     s.ArrivalTime,
+                    s.Date,
+                   
                     // Tính giá từ PriceLists của Route
                     Price = s.Route.PriceLists
                         .Where(p => p.BusTypeId == s.Bus.BusTypeId)
@@ -131,6 +133,7 @@ namespace BEPrj3.Controllers
                 AvailableSeats = schedule.Bus.TotalSeats - schedule.Bookings.Sum(b => b.SeatNumber),
                 schedule.DepartureTime,
                 schedule.ArrivalTime,
+
                 schedule.Route.StartingPlace,
                 schedule.Route.DestinationPlace,
                 schedule.Route.Distance,
@@ -239,15 +242,15 @@ namespace BEPrj3.Controllers
             // Tính giá cuối cùng
             decimal finalPrice = basePrice * multiplier;
 
-            // Tạo đối tượng Schedule mới
             var schedule = new Schedule
             {
                 BusId = scheduleRequest.BusId,
                 RouteId = scheduleRequest.RouteId,
                 DepartureTime = scheduleRequest.DepartureTime,
                 ArrivalTime = scheduleRequest.ArrivalTime,
-                AvailableSeats = bus.TotalSeats, // Ban đầu tất cả ghế đều còn trống
-                Price = finalPrice // Lưu giá vé vào bảng Schedule
+                Date = DateOnly.FromDateTime(scheduleRequest.Date),
+                AvailableSeats = bus.TotalSeats, 
+                Price = finalPrice 
             };
 
             // Lưu vào cơ sở dữ liệu
@@ -262,6 +265,7 @@ namespace BEPrj3.Controllers
                 schedule.RouteId,
                 schedule.DepartureTime,
                 schedule.ArrivalTime,
+                schedule.Date,
                 schedule.AvailableSeats,
                 Price = schedule.Price // Trả về giá đã lưu
             };

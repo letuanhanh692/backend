@@ -5,6 +5,6 @@
         public string BusNumber { get; set; } = string.Empty;
         public int BusTypeId { get; set; }
         public int TotalSeats { get; set; }
-        public IFormFile? File { get; set; } // File ảnh
+        public IFormFile? File { get; set; } 
     }
 }

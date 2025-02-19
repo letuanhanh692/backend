@@ -163,76 +163,88 @@ namespace BEPrj3.Controllers
         //    return Ok(new { message = "User registered successfully." });
         //}
         [HttpPost("login-staff")]
-        public IActionResult Login(string email, string password)
+        public IActionResult LoginStaff([FromBody] LoginUserModel model)
         {
-            // Bước 1: Xác thực tài khoản Staff
-            var staff = _context.Users.FirstOrDefault(u => u.Email == email && u.Password == password && u.RoleId == 2);
-
-            if (staff == null)
+            if (model == null || string.IsNullOrEmpty(model.Email) || string.IsNullOrEmpty(model.Password))
             {
-                return Unauthorized("Email hoặc mật khẩu không hợp lệ.");
+                return BadRequest(new { message = "Invalid credentials" });
             }
 
-            // Bước 2: Lấy tất cả Route mà Staff phụ trách
-            var routes = _context.StaffRoutes
-                                 .Where(sr => sr.StaffId == staff.Id)
-                                 .Select(sr => sr.RouteId)
-                                 .ToList();
+            // Kiểm tra thông tin đăng nhập trong DB
+            var user = _context.Users
+                .FirstOrDefault(u => u.Email == model.Email && u.Password == model.Password && u.RoleId == 2); // Kiểm tra roleId là 2 (Staff)
 
-            var result = _context.Routes
-                .Where(r => routes.Contains(r.Id))
-                .Select(route => new
+            if (user == null)
+            {
+                return Unauthorized(new { message = "Invalid email or password" });
+            }
+
+            // Trả về id của user
+            return Ok(new { userId = user.Id });
+        }
+        [HttpGet("get-staff-routes")]
+        public async Task<IActionResult> GetStaffRoutes([FromQuery] int userId)
+        {
+            // Kiểm tra nếu userId không hợp lệ
+            if (userId <= 0)
+            {
+                return BadRequest(new { message = "Invalid User ID" });
+            }
+
+            try
+            {
+                // Lấy các chuyến xe mà nhân viên quản lý, bao gồm lịch trình và thông tin đặt vé
+                var staffRoutes = await _context.StaffRoutes
+                    .Where(sr => sr.StaffId == userId)
+                    .Include(sr => sr.Route) // Liên kết với Route
+                        .ThenInclude(r => r.Schedules) // Lấy các lịch trình của chuyến xe
+                            .ThenInclude(s => s.Bookings) // Lấy các booking cho từng lịch trình
+                                .ThenInclude(b => b.User) // Lấy thông tin người đặt vé
+                    .ToListAsync(); // Sử dụng async để tối ưu hiệu suất
+
+                if (staffRoutes == null || !staffRoutes.Any())
                 {
-                    route.Id,
-                    route.StartingPlace,
-                    route.DestinationPlace,
-                    route.PriceRoute,
-                    route.Distance,
-                    Schedules = _context.Schedules
-                                        .Where(s => s.RouteId == route.Id)
-                                        .Select(sch => new
-                                        {
-                                            sch.Id,
-                                            sch.DepartureTime,
-                                            sch.ArrivalTime,
-                                            Bookings = _context.Bookings
-                                                               .Where(b => b.ScheduleId == sch.Id)
-                                                               .Select(b => new
-                                                               {
-                                                                   b.Id,
-                                                                   b.TotalAmount,
-                                                                   User = _context.Users
-                                                                                  .Where(u => u.Id == b.UserId)
-                                                                                  .Select(u => new
-                                                                                  {
-                                                                                      u.Id,
-                                                                                      u.Name,
-                                                                                      u.Email,
-                                                                                      u.Phone
-                                                                                  }).FirstOrDefault()
-                                                               }).ToList()
-                                        }).ToList()
+                    return NotFound(new { message = "No routes found for this staff" });
+                }
+
+                // Trả về dữ liệu với cấu trúc chi tiết theo yêu cầu
+                var result = staffRoutes.Select(sr => new
+                {
+                    routeId = sr.Route.Id,
+                    startingPlace = sr.Route.StartingPlace,
+                    destinationPlace = sr.Route.DestinationPlace,
+                    distance = sr.Route.Distance,
+                    schedules = sr.Route.Schedules.Select(s => new
+                    {
+                        scheduleId = s.Id,
+                        departureTime = s.DepartureTime,
+                        arrivalTime = s.ArrivalTime,
+                        date = s.Date,
+                        availableSeats = s.AvailableSeats,
+                        price = s.Price,
+                        bookings = s.Bookings.Select(b => new
+                        {
+                            bookingId = b.Id,
+                            userName = b.Name,
+                            userEmail = b.User.Email,
+                            seatNumber = b.SeatNumber,
+                            age = b.Age,
+                            bookingDate = b.BookingDate,
+                            totalAmount = b.TotalAmount
+                        }).ToList()
+                    }).ToList()
                 }).ToList();
 
-            // Bước 5: Trả về đầy đủ thông tin
-            return Ok(new
+                return Ok(new { staffRoutes = result });
+            }
+            catch (Exception ex)
             {
-                Staff = new
-                {
-                    staff.Id,
-                    staff.Username,
-                    staff.Name,
-                    staff.Email,
-                    staff.Phone,
-                    staff.Address,
-                    staff.IdCard,
-                    staff.DateOfBirth,
-                    staff.Avatar,
-                    staff.RoleId
-                },
-                Routes = result
-            });
+                // Trả về lỗi nếu có vấn đề trong quá trình truy vấn
+                return StatusCode(500, new { message = $"An error occurred: {ex.Message}" });
+            }
         }
+
+
 
         [HttpPost("login-admin")]
         public async Task<IActionResult> LoginAdmin([FromBody] LoginUserModel model)
