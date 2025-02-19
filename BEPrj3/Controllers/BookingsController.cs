@@ -48,7 +48,7 @@ namespace BEPrj3.Controllers
                     Status = b.Status,
 
                     // Thông tin chuyến đi
-                    BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
+                    BusNumber = b.Schedule.Bus.BusNumber,
                     BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
                     DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
                     ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
@@ -76,6 +76,8 @@ namespace BEPrj3.Controllers
                  .Skip((page - 1) * pageSize)  // Bỏ qua các bản ghi trước trang hiện tại
                  .Take(pageSize)               // Lấy số bản ghi theo kích thước trang
                   .ToListAsync();
+           
+
 
             var bookingResponsesPaged = bookingsPaged.Select(b => new BookingResponseDto
             {
@@ -91,13 +93,7 @@ namespace BEPrj3.Controllers
                 TotalAmount = b.TotalAmount,
                 Status = b.Status,
 
-                BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
-                BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
-                DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
-                ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
-                StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
-                DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
-                Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
+               
             }).ToList();
 
             var response = new
