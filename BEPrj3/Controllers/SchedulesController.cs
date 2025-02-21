@@ -174,10 +174,31 @@ namespace BEPrj3.Controllers
                 return BadRequest(new { message = "ArrivalTime must be later than DepartureTime." });
             }
 
+            // Cập nhật thông tin lịch trình
             schedule.BusId = scheduleRequest.BusId;
             schedule.RouteId = scheduleRequest.RouteId;
             schedule.DepartureTime = scheduleRequest.DepartureTime;
             schedule.ArrivalTime = scheduleRequest.ArrivalTime;
+            schedule.Date = DateOnly.FromDateTime(scheduleRequest.Date);
+
+            // Tính toán lại giá vé
+            decimal basePrice = route.PriceRoute ?? 0;
+            if (basePrice == 0)
+            {
+                return BadRequest(new { message = "No base price found for this route." });
+            }
+
+            decimal multiplier = bus.BusTypeId switch
+            {
+                1 => 1.0m,  // Hạng phổ thông
+                2 => 1.1m,  // Hạng trung
+                3 => 1.2m,  // Hạng cao cấp
+                4 => 1.3m,  // Hạng VIP
+                _ => 1.0m
+            };
+
+            // Áp dụng công thức tính giá
+            schedule.Price = basePrice * multiplier;
 
             try
             {
@@ -195,8 +216,22 @@ namespace BEPrj3.Controllers
                 }
             }
 
-            return Ok(new { message = "Schedule updated successfully." });
+            // Trả về dữ liệu sau khi cập nhật và tính toán
+            var updatedSchedule = new
+            {
+                schedule.Id,
+                schedule.BusId,
+                schedule.RouteId,
+                schedule.DepartureTime,
+                schedule.ArrivalTime,
+                schedule.Date,
+                schedule.Price,
+                message = "Schedule updated and price recalculated successfully."
+            };
+
+            return Ok(updatedSchedule);
         }
+
 
         [HttpPost]
         public async Task<ActionResult<Schedule>> PostSchedule([FromBody] ScheduleRequest scheduleRequest)
