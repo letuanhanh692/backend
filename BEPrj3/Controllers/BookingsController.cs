@@ -212,19 +212,13 @@ namespace BEPrj3.Controllers
                 return BadRequest("Không đủ ghế để đặt.");
             }
 
-            var priceList = await _context.PriceLists
-                .FirstOrDefaultAsync(pl => pl.RouteId == schedule.RouteId && pl.BusTypeId == schedule.Bus.BusTypeId);
-
-            if (priceList == null)
-            {
-                return BadRequest("Không tìm thấy giá vé cho chuyến đi này.");
-            }
             if (schedule.DepartureTime < DateTime.Now)
             {
                 return BadRequest("Cannot book a trip that has already passed.");
             }
 
-            decimal pricePerSeat = priceList.Price;
+            decimal pricePerSeat = (decimal)schedule.Price; // Lấy giá từ Schedule
+
             if (bookingRequestDto.Age < 5) pricePerSeat = 0;
             else if (bookingRequestDto.Age >= 5 && bookingRequestDto.Age <= 12) pricePerSeat *= 0.5M;
             else if (bookingRequestDto.Age > 50) pricePerSeat *= 0.3M;
@@ -277,6 +271,7 @@ namespace BEPrj3.Controllers
 
             return CreatedAtAction("GetBooking", new { id = booking.Id }, bookingResponse);
         }
+
 
         // DELETE: api/Bookings/5
         [HttpDelete("{id}")]
