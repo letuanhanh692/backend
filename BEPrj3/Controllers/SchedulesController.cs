@@ -297,23 +297,47 @@ namespace BEPrj3.Controllers
 
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<object>>> SearchSchedules(
-        [FromQuery] string startingPlace,
-        [FromQuery] string destinationPlace,
-        [FromQuery] DateTime? departureDateTime)
+    [FromQuery] string startingPlace,
+    [FromQuery] string destinationPlace,
+    [FromQuery] DateTime? departureDateTime)
         {
             if (string.IsNullOrEmpty(startingPlace) || string.IsNullOrEmpty(destinationPlace))
             {
-                return BadRequest(new { message = "StartingPlace and DestinationPlace are required." });
+                return BadRequest(new { message = "StartingPlace và DestinationPlace là bắt buộc." });
             }
 
+            // Chuẩn hóa chuỗi (đặt ngoài LINQ)
+            string NormalizeString(string input)
+            {
+                if (string.IsNullOrEmpty(input)) return "";
+                var normalized = input.Normalize(System.Text.NormalizationForm.FormD);
+                var sb = new System.Text.StringBuilder();
+                foreach (var c in normalized)
+                {
+                    if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                        sb.Append(c);
+                }
+                return sb.ToString().ToLower().Replace(" ", "");
+            }
+
+            // Chuẩn hóa từ khóa tìm kiếm
+            var normalizedStartingPlace = NormalizeString(startingPlace);
+            var normalizedDestinationPlace = NormalizeString(destinationPlace);
+
+            // Truy vấn dữ liệu từ DB trước (chưa áp dụng Normalize)
             var schedules = await _context.Schedules
                 .Include(s => s.Route)
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
-                .Where(s => s.Route.StartingPlace == startingPlace
-                            && s.Route.DestinationPlace == destinationPlace
-                            && (!departureDateTime.HasValue || s.DepartureTime.Date == departureDateTime.Value.Date))
+                .ToListAsync(); // Lấy toàn bộ dữ liệu về bộ nhớ
+
+            // Sau đó lọc dữ liệu trong bộ nhớ
+            var filteredSchedules = schedules
+                .Where(s =>
+                    NormalizeString(s.Route.StartingPlace).Contains(normalizedStartingPlace) &&
+                    NormalizeString(s.Route.DestinationPlace).Contains(normalizedDestinationPlace) &&
+                    (!departureDateTime.HasValue || s.DepartureTime.Date == departureDateTime.Value.Date))
                 .Select(s => new
                 {
                     s.Id,
@@ -326,16 +350,16 @@ namespace BEPrj3.Controllers
                     s.Route.StartingPlace,
                     s.Route.DestinationPlace,
                     Price = s.Price,
-                    ImageBus = s.Bus.ImageBus // Trả về hình ảnh của Bus
+                    ImageBus = s.Bus.ImageBus
                 })
-                .ToListAsync();
+                .ToList();
 
-            if (schedules.Count == 0)
+            if (filteredSchedules.Count == 0)
             {
-                return NotFound(new { message = "No schedules found for the given criteria." });
+                return NotFound(new { message = "Không tìm thấy chuyến nào." });
             }
 
-            return Ok(schedules);
+            return Ok(filteredSchedules);
         }
 
         // GET: api/Schedules/today
