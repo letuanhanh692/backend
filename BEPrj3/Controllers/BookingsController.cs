@@ -158,14 +158,68 @@ namespace BEPrj3.Controllers
 
         // PUT: api/Bookings/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutBooking(int id, Booking booking)
+        public async Task<IActionResult> PutBooking(int id, BookingRequestDto bookingRequestDto)
         {
-            if (id != booking.Id)
+            if (id <= 0)
             {
-                return BadRequest();
+                return BadRequest("ID không hợp lệ.");
             }
 
-            _context.Entry(booking).State = EntityState.Modified;
+
+            // Lấy thông tin đặt vé hiện tại
+            var booking = await _context.Bookings
+                .Include(b => b.Schedule)
+                .ThenInclude(s => s.Bus)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (booking == null)
+            {
+                return NotFound("Đặt vé không tồn tại.");
+            }
+
+            // Kiểm tra lịch trình
+            var schedule = booking.Schedule;
+            if (schedule == null)
+            {
+                return BadRequest("Chuyến đi không tồn tại.");
+            }
+
+            // Tính số ghế khả dụng sau khi trừ số ghế cũ và cộng số ghế mới
+            int bookedSeats = await _context.Bookings
+                .Where(b => b.ScheduleId == bookingRequestDto.ScheduleId && b.Id != id)
+                .SumAsync(b => b.SeatNumber);
+
+            int availableSeats = schedule.Bus.TotalSeats - bookedSeats;
+
+            if (availableSeats < bookingRequestDto.SeatNumber)
+            {
+                return BadRequest("Không đủ ghế để đặt.");
+            }
+
+            // Kiểm tra ngày khởi hành
+            if (schedule.DepartureTime < DateTime.Now)
+            {
+                return BadRequest("Không thể chỉnh sửa chuyến đã khởi hành.");
+            }
+
+            // Tính lại giá vé theo độ tuổi
+            decimal pricePerSeat = (decimal)schedule.Price;
+
+            if (bookingRequestDto.Age < 5) pricePerSeat = 0;
+            else if (bookingRequestDto.Age >= 5 && bookingRequestDto.Age <= 12) pricePerSeat *= 0.5M;
+            else if (bookingRequestDto.Age > 50) pricePerSeat *= 0.7M;
+
+            decimal totalAmount = pricePerSeat * bookingRequestDto.SeatNumber;
+
+            // Cập nhật thông tin đặt vé
+            booking.UserId = bookingRequestDto.UserId;
+            booking.ScheduleId = bookingRequestDto.ScheduleId;
+            booking.SeatNumber = bookingRequestDto.SeatNumber;
+            booking.Name = bookingRequestDto.Name;
+            booking.Age = bookingRequestDto.Age;
+            booking.TotalAmount = totalAmount;
+            booking.Status = bookingRequestDto.Status; 
+            booking.BookingDate = DateTime.Now;
 
             try
             {
@@ -183,8 +237,13 @@ namespace BEPrj3.Controllers
                 }
             }
 
-            return NoContent();
+            return Ok(new
+            {
+                Message = "Cập nhật đặt vé thành công.",
+                Booking = booking
+            });
         }
+
 
         // POST: api/Bookings
         [HttpPost]
@@ -221,7 +280,7 @@ namespace BEPrj3.Controllers
 
             if (bookingRequestDto.Age < 5) pricePerSeat = 0;
             else if (bookingRequestDto.Age >= 5 && bookingRequestDto.Age <= 12) pricePerSeat *= 0.5M;
-            else if (bookingRequestDto.Age > 50) pricePerSeat *= 0.3M;
+            else if (bookingRequestDto.Age > 50) pricePerSeat *= 0.7M;
 
             decimal totalAmount = pricePerSeat * bookingRequestDto.SeatNumber;
 
@@ -302,6 +361,49 @@ namespace BEPrj3.Controllers
         {
             return _context.Bookings.Any(e => e.Id == id);
         }
+        [HttpGet("user/{userId}")]
+        public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetBookingsByUserId(int userId)
+        {
+            var bookings = await _context.Bookings
+                .Include(b => b.User)
+                .Include(b => b.Schedule)
+                    .ThenInclude(s => s.Route)
+                .Include(b => b.Schedule)
+                    .ThenInclude(s => s.Bus)
+                    .ThenInclude(b => b.BusType)
+                .Where(b => b.UserId == userId)
+                .ToListAsync();
+
+            if (bookings == null || !bookings.Any())
+            {
+                return NotFound("No bookings found for this user.");
+            }
+
+            var bookingResponses = bookings.Select(b => new BookingResponseDto
+            {
+                BookingId = b.Id,
+                UserId = b.UserId,
+                ScheduleId = b.ScheduleId,
+                Name = b.Name,
+                Age = b.Age,
+                Phone = b.User?.Phone ?? "Unknown",
+                Email = b.User?.Email ?? "Unknown",
+                SeatNumber = b.SeatNumber,
+                BookingDate = b.BookingDate ?? DateTime.MinValue,
+                TotalAmount = b.TotalAmount,
+                Status = b.Status,
+                BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
+                BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
+                DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
+                ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
+                StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
+                DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
+                Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
+            }).ToList();
+
+            return Ok(bookingResponses);
+        }
+
 
         // GET: api/Bookings/Search
         [HttpGet("search")]
