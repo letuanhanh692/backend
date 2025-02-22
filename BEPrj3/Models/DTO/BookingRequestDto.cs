@@ -15,6 +15,8 @@
         public string Email { get; set; }  // Email khách hàng
 
         public int SeatNumber { get; set; }  // Số ghế khách hàng muốn đặt
+        public string? Status { get; set; }
+
     }
 
 }
