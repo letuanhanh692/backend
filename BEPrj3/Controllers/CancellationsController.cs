@@ -20,14 +20,13 @@ namespace BEPrj3.Controllers
             _context = context;
         }
 
-        // GET: api/Cancellations
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Cancellation>>> GetCancellations(int page = 1, int pageSize = 7)
         {
             if (page == 0 && pageSize == 0)
             {
                 var allCancellations = await _context.Cancellations
-                    .OrderByDescending(c => c.Id) // Sắp xếp mới nhất lên trước
+                    .OrderByDescending(c => c.Id)
                     .ToListAsync();
 
                 return Ok(new
@@ -42,9 +41,9 @@ namespace BEPrj3.Controllers
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
             var cancellations = await _context.Cancellations
-                .OrderByDescending(c => c.Id)  // Sắp xếp mới nhất lên trước
-                .Skip((page - 1) * pageSize)   // Bỏ qua các bản ghi trước trang hiện tại
-                .Take(pageSize)                // Lấy giới hạn số bản ghi cho trang hiện tại
+                .OrderByDescending(c => c.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             return Ok(new
@@ -55,9 +54,6 @@ namespace BEPrj3.Controllers
             });
         }
 
-
-
-        // GET: api/Cancellations/Detail/{id}
         [HttpGet("{id}")]
         public async Task<ActionResult<object>> GetCancellationDetail(int id)
         {
@@ -103,8 +99,6 @@ namespace BEPrj3.Controllers
             return Ok(cancellationDetail);
         }
 
-
-        // PUT: api/Cancellations/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutCancellation(int id, [FromBody] Cancellation updatedCancellation)
         {
@@ -119,12 +113,10 @@ namespace BEPrj3.Controllers
                 return NotFound();
             }
 
-            // Cập nhật các trường cần thiết
             existingCancellation.BookingId = updatedCancellation.BookingId;
             existingCancellation.CancellationDate = updatedCancellation.CancellationDate;
             existingCancellation.RefundAmount = updatedCancellation.RefundAmount;
 
-            // Lấy thông tin `Booking` từ `BookingId`
             var booking = await _context.Bookings.FindAsync(updatedCancellation.BookingId);
             if (booking == null)
             {
@@ -132,7 +124,6 @@ namespace BEPrj3.Controllers
             }
             existingCancellation.Booking = booking;
 
-            // Đánh dấu là đã chỉnh sửa
             _context.Entry(existingCancellation).State = EntityState.Modified;
 
             try
@@ -154,10 +145,6 @@ namespace BEPrj3.Controllers
             return NoContent();
         }
 
-
-        // POST: api/Cancellations
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        // POST: api/Cancellations
         [HttpPost("{bookingId}")]
         public async Task<ActionResult<Cancellation>> PostCancellation(int bookingId)
         {
@@ -167,9 +154,9 @@ namespace BEPrj3.Controllers
                 return NotFound("Booking not found.");
             }
 
+            // ✅ Include Bus để lấy TotalSeats
             var schedule = await _context.Schedules
-                .Include(s => s.Bus) // Bao gồm thông tin xe
-                .Include(s => s.Route) // Bao gồm thông tin tuyến đường
+                .Include(s => s.Bus) // Load Bus để lấy tổng ghế
                 .FirstOrDefaultAsync(s => s.Id == booking.ScheduleId);
 
             if (schedule == null)
@@ -177,75 +164,100 @@ namespace BEPrj3.Controllers
                 return NotFound("Schedule not found.");
             }
 
-            // Tính toán số tiền hoàn trả trực tiếp trong controller
+            if (schedule.Bus == null)
+            {
+                return BadRequest("Bus information is missing for this schedule.");
+            }
+
+            int totalSeats = schedule.Bus.TotalSeats; // ✅ Lấy TotalSeats từ Bus
+
+            // ✅ Kiểm tra số ghế đặt
+            int bookedSeats = booking.SeatNumber; // Nếu SeatNumber là số ghế đã đặt
+            if (bookedSeats <= 0)
+            {
+                return BadRequest("Invalid number of booked seats.");
+            }
+
+            // ✅ Tính số tiền hoàn lại
             decimal refundAmount = 0;
             var timeToDeparture = schedule.DepartureTime - DateTime.Now;
 
-            // Quy định hoàn trả theo thời gian
             if (timeToDeparture.TotalHours >= 24)
             {
-                refundAmount = booking.TotalAmount;  // Hoàn 100% nếu hủy trước 24h
+                refundAmount = booking.TotalAmount; // Hoàn 100% nếu huỷ trước 24h
             }
             else if (timeToDeparture.TotalHours >= 0)
             {
-                refundAmount = booking.TotalAmount * 0.5m;  // Hoàn 50% nếu hủy trong vòng 24h
+                refundAmount = booking.TotalAmount * 0.5m; // Hoàn 50% nếu huỷ trong vòng 24h
             }
             else
             {
-                refundAmount = 0;  // Không hoàn tiền nếu đã qua thời gian khởi hành
+                refundAmount = 0; // Không hoàn nếu đã qua giờ khởi hành
             }
 
-            // Cập nhật trạng thái vé trong bảng Booking
+            // ✅ Cập nhật trạng thái Booking
             booking.Status = "Cancelled";
             _context.Bookings.Update(booking);
 
-            // Tạo bản ghi hủy vé nếu cần lưu lại lịch sử hủy vé
+            // ✅ Tạo bản ghi Cancellation
             var cancellation = new Cancellation
             {
                 BookingId = booking.Id,
                 CancellationDate = DateTime.Now,
                 RefundAmount = refundAmount,
-                // Không cần thêm Status vào Cancellation nữa
             };
-
             _context.Cancellations.Add(cancellation);
+
+            // ✅ Cộng lại đúng số ghế đã hủy
+            schedule.AvailableSeats += bookedSeats;
+            if (schedule.AvailableSeats > totalSeats)
+            {
+                schedule.AvailableSeats = totalSeats; // Không vượt quá tổng ghế xe buýt
+            }
+            _context.Schedules.Update(schedule);
+
             await _context.SaveChangesAsync();
 
-            // Thực hiện hoàn tiền (ví dụ qua VNPay hoặc phương thức thanh toán khác)
+            // ✅ Giả lập hoàn tiền
             bool refundSuccess = await ProcessRefund(booking, refundAmount);
-
-            if (refundSuccess)
+            if (!refundSuccess)
             {
-                // Cập nhật lại số ghế còn lại trong lịch trình
-                schedule.AvailableSeats += booking.SeatNumber; // Cộng lại số ghế đã hủy
-                _context.Schedules.Update(schedule); // Cập nhật lại thông tin lịch trình
-                await _context.SaveChangesAsync();
+                return StatusCode(500, "Refund failed.");
             }
 
-            return Ok(cancellation);
+            return Ok(new
+            {
+                CancellationId = cancellation.Id,
+                BookingId = booking.Id,
+                RefundAmount = refundAmount,
+                CancellationDate = cancellation.CancellationDate,
+                AvailableSeats = schedule.AvailableSeats
+            });
         }
 
         private async Task<bool> ProcessRefund(Booking booking, decimal refundAmount)
         {
             try
             {
-                // Giả lập xử lý hoàn tiền
+                // 🔔 Giả lập logic hoàn tiền
                 Console.WriteLine($"Refund processed for Booking Id: {booking.Id} with Amount: {refundAmount}");
 
-                // Ở đây bạn có thể gọi đến cổng thanh toán như VNPay hoặc cập nhật trạng thái thanh toán của bạn.
+                // Nếu tích hợp VNPay hoặc cổng thanh toán thực tế:
+                // - Gọi API hoàn tiền tại đây
+                // - Kiểm tra kết quả và trả về true/false
 
-                return true; // Giả sử hoàn tiền thành công
+                await Task.Delay(100); // Giả lập thời gian xử lý
+
+                return true; // Trả về true nếu hoàn tiền thành công
             }
             catch (Exception ex)
             {
-                // Xử lý lỗi nếu có vấn đề xảy ra
                 Console.WriteLine($"Error processing refund: {ex.Message}");
-                return false; // Hoàn tiền thất bại
+                return false; // Trả về false nếu hoàn tiền thất bại
             }
         }
 
 
-        // DELETE: api/Cancellations/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCancellation(int id)
         {

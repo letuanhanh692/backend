@@ -32,8 +32,7 @@ namespace BEPrj3.Controllers
                     .Include(s => s.Bus)
                     .ThenInclude(b => b.BusType)
                     .Include(s => s.Bookings)
-                    .OrderByDescending(s => s.Id) 
-                    
+                    .OrderByDescending(s => s.Id)
                     .Select(s => new
                     {
                         s.Id,
@@ -41,12 +40,16 @@ namespace BEPrj3.Controllers
                         BusNumber = s.Bus.BusNumber,
                         BusType = s.Bus.BusType.TypeName,
                         TotalSeats = s.Bus.TotalSeats,
-                        AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                        AvailableSeats = s.Bus.TotalSeats - s.Bookings
+                            .Where(b => b.Status != "Cancelled")
+                            .Sum(b => b.SeatNumber),
                         s.DepartureTime,
                         s.ArrivalTime,
                         s.Date,
-                        // Tính giá từ PriceLists của Route
-                        Price = s.Price,
+                        Price = s.Route.PriceLists
+                            .Where(p => p.BusTypeId == s.Bus.BusTypeId)
+                            .Select(p => p.Price)
+                            .FirstOrDefault(),
                         ImageBus = s.Bus.ImageBus
                     })
                     .ToListAsync();
@@ -54,20 +57,20 @@ namespace BEPrj3.Controllers
                 return Ok(new
                 {
                     totalSchedules = allSchedules.Count,
-                    totalPages = 1, // Vì lấy tất cả nên chỉ có 1 trang
+                    totalPages = 1,
                     currentPage = 1,
-                    pageSize = allSchedules.Count, // Tất cả bản ghi
+                    pageSize = allSchedules.Count,
                     schedules = allSchedules
                 });
             }
 
-            // Nếu không phải trường hợp lấy tất cả thì thực hiện phân trang
+            // ✅ Phân trang
             var schedules = await _context.Schedules
                 .Include(s => s.Route)
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
-                .OrderByDescending(s => s.Id) 
+                .OrderByDescending(s => s.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(s => new
@@ -77,12 +80,12 @@ namespace BEPrj3.Controllers
                     BusNumber = s.Bus.BusNumber,
                     BusType = s.Bus.BusType.TypeName,
                     TotalSeats = s.Bus.TotalSeats,
-                    AvailableSeats = s.Bus.TotalSeats - s.Bookings.Sum(b => b.SeatNumber),
+                    AvailableSeats = s.Bus.TotalSeats - s.Bookings
+                        .Where(b => b.Status != "Cancelled")
+                        .Sum(b => b.SeatNumber),
                     s.DepartureTime,
                     s.ArrivalTime,
                     s.Date,
-                   
-                    // Tính giá từ PriceLists của Route
                     Price = s.Route.PriceLists
                         .Where(p => p.BusTypeId == s.Bus.BusTypeId)
                         .Select(p => p.Price)
@@ -94,17 +97,16 @@ namespace BEPrj3.Controllers
             var totalSchedules = await _context.Schedules.CountAsync();
             var totalPages = (int)Math.Ceiling((double)totalSchedules / pageSize);
 
-            var result = new
+            return Ok(new
             {
                 totalSchedules,
                 totalPages,
                 currentPage = page,
                 pageSize,
                 schedules
-            };
-
-            return Ok(result);
+            });
         }
+
 
         // GET: api/Schedules/5
         [HttpGet("{id}")]
@@ -115,7 +117,6 @@ namespace BEPrj3.Controllers
                 .Include(s => s.Bus)
                 .ThenInclude(b => b.BusType)
                 .Include(s => s.Bookings)
-               
                 .FirstOrDefaultAsync(s => s.Id == id);
 
             if (schedule == null)
@@ -123,6 +124,9 @@ namespace BEPrj3.Controllers
                 return NotFound(new { message = "Schedule not found." });
             }
 
+            var availableSeats = schedule.Bus.TotalSeats - schedule.Bookings
+                .Where(b => b.Status != "Cancelled")
+                .Sum(b => b.SeatNumber);
 
             var scheduleDetails = new
             {
@@ -130,20 +134,19 @@ namespace BEPrj3.Controllers
                 BusNumber = schedule.Bus.BusNumber,
                 BusType = schedule.Bus.BusType.TypeName,
                 TotalSeats = schedule.Bus.TotalSeats,
-                AvailableSeats = schedule.Bus.TotalSeats - schedule.Bookings.Sum(b => b.SeatNumber),
+                AvailableSeats = availableSeats,
                 schedule.DepartureTime,
                 schedule.ArrivalTime,
-
                 schedule.Route.StartingPlace,
                 schedule.Route.DestinationPlace,
                 schedule.Route.Distance,
                 schedule.Price,
                 ImageBus = schedule.Bus.ImageBus
             };
-            // push code demo checkout
 
             return Ok(scheduleDetails);
         }
+
 
         // PUT: api/Schedules/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
