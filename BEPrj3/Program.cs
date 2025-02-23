@@ -1,4 +1,5 @@
 using BEPrj3.Models;
+using BEPrj3.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +45,8 @@ builder.Services.AddControllers()
 
     });
 builder.Services.AddDirectoryBrowser();
+builder.Services.AddScoped<IVnPayService, VnPayService>();
+
 var app = builder.Build();
 
 app.UseStaticFiles();
