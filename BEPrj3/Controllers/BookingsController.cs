@@ -24,11 +24,11 @@ namespace BEPrj3.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetBookings(int page = 1, int pageSize = 4)
         {
-            // Nếu page và pageSize bằng 0, lấy tất cả các bản ghi
             if (page == 0 && pageSize == 0)
             {
                 var bookings = await _context.Bookings
-                      .OrderByDescending(b => b.Id)
+                    .Include(b => b.Cancellations) // Include để lấy RefundAmount
+                    .OrderByDescending(b => b.Id)
                     .ToListAsync();
 
                 var bookingResponses = bookings.Select(b => new BookingResponseDto
@@ -45,38 +45,38 @@ namespace BEPrj3.Controllers
                     TotalAmount = b.TotalAmount,
                     Status = b.Status,
 
-                    // Kiểm tra null trước khi truy xuất dữ liệu
+                    // Thông tin chuyến đi
                     BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
                     BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
                     DepartTime = b.Schedule?.DepartureTime ?? DateTime.MinValue,
                     ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
                     StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
                     DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
-                    Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
-                }).ToList();
+                    Distance = (double)(b.Schedule?.Route?.Distance ?? 0),
 
+                    // ✅ Thêm RefundAmount
+                    RefundAmount = b.Cancellations.FirstOrDefault()?.RefundAmount ?? 0
+                }).ToList();
 
                 return Ok(new
                 {
                     TotalRecords = bookingResponses.Count,
-                    TotalPages = 1, 
+                    TotalPages = 1,
                     CurrentPage = 1,
                     PageSize = bookingResponses.Count,
                     Bookings = bookingResponses
                 });
             }
 
-            // Nếu pageSize khác 0 và page khác 0, thực hiện phân trang bình thường
-            var totalRecords = await _context.Bookings.CountAsync(); // Tổng số bản ghi
-            var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize); // Tính tổng số trang
+            var totalRecords = await _context.Bookings.CountAsync();
+            var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
 
             var bookingsPaged = await _context.Bookings
-                .OrderByDescending(b => b.Id) // Sắp xếp giảm dần để bản ghi mới nhất lên đầu
-                 .Skip((page - 1) * pageSize)  // Bỏ qua các bản ghi trước trang hiện tại
-                 .Take(pageSize)               // Lấy số bản ghi theo kích thước trang
-                  .ToListAsync();
-           
-
+                .Include(b => b.Cancellations) // Include Cancellations
+                .OrderByDescending(b => b.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
             var bookingResponsesPaged = bookingsPaged.Select(b => new BookingResponseDto
             {
@@ -92,19 +92,18 @@ namespace BEPrj3.Controllers
                 TotalAmount = b.TotalAmount,
                 Status = b.Status,
 
-               
+                // ✅ Thêm RefundAmount
+                RefundAmount = b.Cancellations.FirstOrDefault()?.RefundAmount ?? 0
             }).ToList();
 
-            var response = new
+            return Ok(new
             {
                 TotalRecords = totalRecords,
                 TotalPages = totalPages,
                 CurrentPage = page,
                 PageSize = pageSize,
                 Bookings = bookingResponsesPaged
-            };
-
-            return Ok(response);
+            });
         }
 
 
@@ -114,12 +113,13 @@ namespace BEPrj3.Controllers
         public async Task<ActionResult<BookingResponseDto>> GetBooking(int id)
         {
             var booking = await _context.Bookings
-                .Include(b => b.User) // Bổ sung User để tránh lỗi null
+                .Include(b => b.User)
                 .Include(b => b.Schedule)
                     .ThenInclude(s => s.Route)
                 .Include(b => b.Schedule)
                     .ThenInclude(s => s.Bus)
                     .ThenInclude(b => b.BusType)
+                .Include(b => b.Cancellations) // Include Cancellations để lấy RefundAmount
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (booking == null)
@@ -127,12 +127,11 @@ namespace BEPrj3.Controllers
                 return NotFound();
             }
 
-            // Kiểm tra null trước khi truy cập thuộc tính
             var bookingResponse = new BookingResponseDto
             {
                 BookingId = booking.Id,
-                UserId = booking.UserId, // Thêm dòng này
-                ScheduleId = booking.ScheduleId, // Thêm dòng này
+                UserId = booking.UserId,
+                ScheduleId = booking.ScheduleId,
                 Name = booking.Name ?? "Unknown",
                 Age = booking.Age,
                 Phone = booking.User?.Phone ?? "Unknown",
@@ -149,9 +148,11 @@ namespace BEPrj3.Controllers
                 ArrivalTime = booking.Schedule?.ArrivalTime ?? DateTime.MinValue,
                 StartingPlace = booking.Schedule?.Route?.StartingPlace ?? "N/A",
                 DestinationPlace = booking.Schedule?.Route?.DestinationPlace ?? "N/A",
-                Distance = (double)(booking.Schedule?.Route?.Distance ?? 0)
-            };
+                Distance = (double)(booking.Schedule?.Route?.Distance ?? 0),
 
+                // ✅ Thêm RefundAmount
+                RefundAmount = booking.Cancellations.FirstOrDefault()?.RefundAmount ?? 0
+            };
 
             return Ok(bookingResponse);
         }
@@ -371,6 +372,7 @@ namespace BEPrj3.Controllers
                 .Include(b => b.Schedule)
                     .ThenInclude(s => s.Bus)
                     .ThenInclude(b => b.BusType)
+                    .Include(b => b.Cancellations)
                 .Where(b => b.UserId == userId)
                 .ToListAsync();
 
@@ -391,6 +393,9 @@ namespace BEPrj3.Controllers
                 SeatNumber = b.SeatNumber,
                 BookingDate = b.BookingDate ?? DateTime.MinValue,
                 TotalAmount = b.TotalAmount,
+                
+
+
                 Status = b.Status,
                 BusNumber = b.Schedule?.Bus?.BusNumber ?? "N/A",
                 BusType = b.Schedule?.Bus?.BusType?.TypeName ?? "N/A",
@@ -398,7 +403,9 @@ namespace BEPrj3.Controllers
                 ArrivalTime = b.Schedule?.ArrivalTime ?? DateTime.MinValue,
                 StartingPlace = b.Schedule?.Route?.StartingPlace ?? "N/A",
                 DestinationPlace = b.Schedule?.Route?.DestinationPlace ?? "N/A",
-                Distance = (double)(b.Schedule?.Route?.Distance ?? 0)
+                Distance = (double)(b.Schedule?.Route?.Distance ?? 0),
+
+                RefundAmount = b.Cancellations.FirstOrDefault()?.RefundAmount ?? 0
             }).ToList();
 
             return Ok(bookingResponses);
