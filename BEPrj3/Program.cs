@@ -61,6 +61,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sandbox.vnpayment.vn; " +
+        "style-src 'self' 'unsafe-inline' https://sandbox.vnpayment.vn; " +
+        "img-src 'self' data: https://sandbox.vnpayment.vn;");
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapControllers();

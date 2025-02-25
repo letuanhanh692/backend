@@ -6,9 +6,9 @@ namespace BEPrj3.Services
     public class VnPayService : IVnPayService
     {
         private readonly string _vnpUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
-        private readonly string _vnpTmnCode = "YOUR_TMNCODE";
-        private readonly string _vnpHashSecret = "YOUR_HASH_SECRET";
-        private readonly string _returnUrl = "https://yourdomain.com/vnpay_return";
+        private readonly string _vnpTmnCode = "OEJQZMSO";
+        private readonly string _vnpHashSecret = "FDAVZNNO2WAM2YZXZNC3QD54R3H9HDIX";
+        private readonly string _returnUrl = "http://localhost:5172/Checkout/PaymentCallbackVnpay";
 
         public string CreatePaymentUrl(PaymentInformationModel model, string baseUrl, string paymentCode)
         {
