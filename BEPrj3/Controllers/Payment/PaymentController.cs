@@ -107,13 +107,11 @@ namespace BEPrj3.Controllers.Payment
 
                 await _context.SaveChangesAsync();
 
-                return responseModel.Success
-                    ? Ok(new { message = "Thanh toán thành công", data = responseModel })
-                    : BadRequest(new { message = "Thanh toán thất bại", data = responseModel });
+                return Redirect($"http://localhost:4200/user/success");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Lỗi xử lý thanh toán.", error = ex.Message });
+                return Redirect($"http://localhost:4200/fail");
             }
         }
 

@@ -26,5 +26,6 @@
         public double Distance { get; set; }
         public int UserId { get; internal set; }
         public int ScheduleId { get; internal set; }
+        public decimal RefundAmount { get; internal set; }
     }
 }
