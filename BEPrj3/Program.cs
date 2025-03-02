@@ -46,6 +46,7 @@ builder.Services.AddControllers()
     });
 builder.Services.AddDirectoryBrowser();
 builder.Services.AddScoped<IVnPayService, VnPayService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 
